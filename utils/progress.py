@@ -22,7 +22,7 @@ class ProgressBar:
     - ETA estimation
     - Termux compatible
     """
-    
+
     def __init__(self, total: int = 100, prefix: str = "", suffix: str = "",
                  length: int = 40, fill: str = "█", empty: str = "░"):
         self.total = total
@@ -35,44 +35,44 @@ class ProgressBar:
         self.start_time = time.time()
         self.last_update = 0
         self.update_interval = 0.1  # Update every 100ms
-    
+
     def update(self, current: int, suffix: str = None):
         """Update progress bar"""
         self.current = current
-        
+
         # Limit update frequency
         now = time.time()
         if now - self.last_update < self.update_interval and current < self.total:
             return
         self.last_update = now
-        
+
         if suffix:
             self.suffix = suffix
-        
+
         # Calculate progress
         percent = 100 * (self.current / self.total) if self.total > 0 else 0
         filled = int(self.length * self.current // self.total) if self.total > 0 else 0
         bar = f"{NEON_GREEN}{self.fill * filled}{RESET}{DIM}{self.empty * (self.length - filled)}{RESET}"
-        
+
         # Calculate speed and ETA
         elapsed = time.time() - self.start_time
         speed = self.current / elapsed if elapsed > 0 else 0
         eta = (self.total - self.current) / speed if speed > 0 else 0
-        
+
         # Format output
         speed_str = self._format_size(speed) + "/s"
         eta_str = self._format_time(eta)
-        
+
         # Print progress
         line = f"\r{self.prefix} |{bar}| {percent:5.1f}% {speed_str:>10} ETA: {eta_str} {self.suffix}"
         sys.stdout.write(line)
         sys.stdout.flush()
-    
+
     def finish(self, message: str = "Complete!"):
         """Finish progress bar"""
         self.update(self.total, message)
         print()
-    
+
     def _format_size(self, bytes: float) -> str:
         """Format bytes to human readable"""
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -80,7 +80,7 @@ class ProgressBar:
                 return f"{bytes:.1f}{unit}"
             bytes /= 1024
         return f"{bytes:.1f}TB"
-    
+
     def _format_time(self, seconds: float) -> str:
         """Format seconds to readable time"""
         if seconds < 0:
@@ -97,7 +97,7 @@ class DownloadProgress:
     """
     Progress tracker for downloads with detailed info
     """
-    
+
     def __init__(self, filename: str = "", total_size: int = 0):
         self.filename = filename
         self.total_size = total_size
@@ -106,12 +106,12 @@ class DownloadProgress:
         self.last_bytes = 0
         self.last_time = time.time()
         self.speed = 0
-    
+
     def update(self, bytes_received: int):
         """Update download progress"""
         now = time.time()
         self.downloaded = bytes_received
-        
+
         # Calculate speed
         time_diff = now - self.last_time
         if time_diff >= 0.5:  # Update speed every 0.5s
@@ -119,13 +119,13 @@ class DownloadProgress:
             self.speed = bytes_diff / time_diff
             self.last_bytes = self.downloaded
             self.last_time = now
-    
+
     def get_progress(self) -> dict:
         """Get progress info"""
         elapsed = time.time() - self.start_time
         percent = (self.downloaded / self.total_size * 100) if self.total_size > 0 else 0
         eta = (self.total_size - self.downloaded) / self.speed if self.speed > 0 else 0
-        
+
         return {
             'downloaded': self.downloaded,
             'total': self.total_size,
@@ -134,30 +134,30 @@ class DownloadProgress:
             'elapsed': elapsed,
             'eta': eta
         }
-    
+
     def print_progress(self):
         """Print progress line"""
         info = self.get_progress()
-        
+
         # Format values
         downloaded_str = self._format_size(info['downloaded'])
         total_str = self._format_size(info['total'])
         speed_str = self._format_size(info['speed']) + "/s"
         eta_str = self._format_time(info['eta'])
-        
+
         # Create progress bar
         bar_length = 30
         filled = int(bar_length * info['percent'] / 100)
         bar = f"{NEON_GREEN}{'█' * filled}{RESET}{DIM}{'░' * (bar_length - filled)}{RESET}"
-        
+
         # Print line
         line = (f"\r{NEON_CYAN}[↓]{RESET} {self.filename[:30]:<30} "
                 f"[{bar}] {info['percent']:5.1f}% "
                 f"{downloaded_str}/{total_str} {speed_str:>12} ETA: {eta_str}")
-        
+
         sys.stdout.write(line)
         sys.stdout.flush()
-    
+
     def finish(self, success: bool = True):
         """Finish download"""
         self.print_progress()
@@ -165,7 +165,7 @@ class DownloadProgress:
             print(f"\n{NEON_GREEN}✓ Download complete!{RESET}")
         else:
             print(f"\n{NEON_RED}✗ Download failed!{RESET}")
-    
+
     def _format_size(self, bytes: int) -> str:
         """Format bytes"""
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -173,7 +173,7 @@ class DownloadProgress:
                 return f"{bytes:.1f}{unit}"
             bytes /= 1024
         return f"{bytes:.1f}TB"
-    
+
     def _format_time(self, seconds: float) -> str:
         """Format time"""
         if seconds < 0:
@@ -190,12 +190,12 @@ class MultiProgressBar:
     """
     Multiple progress bars for parallel downloads
     """
-    
+
     def __init__(self, num_bars: int = 3, length: int = 30):
         self.num_bars = num_bars
         self.length = length
         self.bars = [ProgressBar(length=length) for _ in range(num_bars)]
-    
+
     def update(self, bar_index: int, current: int, total: int, label: str = ""):
         """Update specific bar"""
         if 0 <= bar_index < self.num_bars:
@@ -203,13 +203,13 @@ class MultiProgressBar:
             bar.total = total
             bar.prefix = label[:15].ljust(15)
             bar.update(current)
-    
+
     def render(self):
         """Render all bars"""
         # Move cursor up for redraw
         for i in range(self.num_bars):
-            sys.stdout.write("\033[F")  # Move up one line
-        
+            sys.stdout.write("[F")  # Move up one line
+
         for bar in self.bars:
             bar.print_progress()
 
@@ -218,7 +218,7 @@ def show_download_progress(downloaded: int, total: int, speed: float = 0,
                            filename: str = "", prefix: str = ""):
     """
     Simple function to show download progress
-    
+
     Args:
         downloaded: Bytes downloaded
         total: Total bytes
@@ -228,12 +228,12 @@ def show_download_progress(downloaded: int, total: int, speed: float = 0,
     """
     # Calculate percentage
     percent = (downloaded / total * 100) if total > 0 else 0
-    
+
     # Create progress bar
     bar_length = 30
     filled = int(bar_length * percent / 100)
     bar = f"{NEON_GREEN}{'█' * filled}{RESET}{DIM}{'░' * (bar_length - filled)}{RESET}"
-    
+
     # Format sizes
     def format_size(b):
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -241,15 +241,15 @@ def show_download_progress(downloaded: int, total: int, speed: float = 0,
                 return f"{b:.1f}{unit}"
             b /= 1024
         return f"{b:.1f}TB"
-    
+
     downloaded_str = format_size(downloaded)
     total_str = format_size(total)
     speed_str = format_size(speed) + "/s" if speed > 0 else "-- MB/s"
-    
+
     # Print progress line
     line = (f"\r{NEON_CYAN}{prefix}{RESET} {filename[:25]:<25} "
             f"[{bar}] {percent:5.1f}% {downloaded_str}/{total_str} {speed_str:>12}")
-    
+
     sys.stdout.write(line)
     sys.stdout.flush()
 
@@ -264,7 +264,7 @@ def print_progress_bar(iteration: int, total: int, prefix: str = '',
                        suffix: str = '', length: int = 50, fill: str = '█'):
     """
     Simple progress bar for any iteration
-    
+
     Args:
         iteration: Current iteration
         total: Total iterations
@@ -276,8 +276,8 @@ def print_progress_bar(iteration: int, total: int, prefix: str = '',
     percent = ("{0:.1f}").format(100 * (iteration / float(total)))
     filled = int(length * iteration // total)
     bar = f"{NEON_GREEN}{fill * filled}{RESET}{DIM}{'░' * (length - filled)}{RESET}"
-    
+
     print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='\r')
-    
+
     if iteration == total:
         print()
