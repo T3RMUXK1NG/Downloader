@@ -1,6 +1,19 @@
-# RS Downloader Toolkit Requirements
-# Install with: pip install -r requirements.txt
+# RS Downloader Toolkit v2.0 - GOD MODE NEXUS
+# Core Dependencies
+yt-dlp>=2024.1.1
+requests>=2.31.0
 
-yt-dlp
-rich
-colorama
+# UI & Terminal
+rich>=13.7.0
+colorama>=0.4.6
+
+# Optional but Recommended
+# mutagen>=1.47.0    # For metadata handling
+# pycryptodomex>=3.20.0  # For encrypted streams
+# websockets>=12.0   # For WebSocket support
+
+# Development Dependencies
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+# flake8>=7.0.0
+# mypy>=1.8.0

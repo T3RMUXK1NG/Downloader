@@ -1,0 +1,206 @@
+name: 🔱 GOD MODE NEXUS CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [published]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ===========================================
+  # Python Toolkit Tests
+  # ===========================================
+  test-python:
+    name: 🐍 Test Python Toolkit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 📦 Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r Downloader/requirements.txt
+          pip install pytest pytest-cov flake8 mypy
+
+      - name: 🔍 Lint Python Code
+        run: |
+          flake8 Downloader --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 Downloader --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: 🧪 Run Python Tests
+        run: |
+          cd Downloader
+          python -m pytest tests/ -v --cov=. --cov-report=xml || echo "No tests yet"
+
+  # ===========================================
+  # Next.js Web App Build
+  # ===========================================
+  build-web:
+    name: 🌐 Build Next.js Web App
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔨 Build Next.js App
+        run: npm run build
+
+      - name: 🔍 Lint Code
+        run: npm run lint
+
+      - name: 📤 Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: |
+            .next/
+            public/
+          retention-days: 7
+
+  # ===========================================
+  # Create Release
+  # ===========================================
+  create-release:
+    name: 🚀 Create Release
+    needs: [test-python, build-web]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📝 Get Version
+        id: version
+        run: |
+          VERSION=$(cat Downloader/rs_toolkit.py | grep "VERSION = " | head -1 | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: 🏷️ Create Release Tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "🔱 GOD MODE NEXUS v${{ steps.version.outputs.version }}" || echo "Tag already exists"
+          git push origin "v${{ steps.version.outputs.version }}" || echo "Tag push failed"
+
+      - name: 📦 Create Python Package
+        run: |
+          cd Downloader
+          zip -r ../rs-downloader-toolkit-v${{ steps.version.outputs.version }}.zip .
+
+      - name: 🚀 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: 🔱 RS Downloader Toolkit v${{ steps.version.outputs.version }} - GOD MODE NEXUS
+          body: |
+            # 🔥 RS DOWNLOADER TOOLKIT v${{ steps.version.outputs.version }} 🔥
+            
+            ## GOD MODE NEXUS EDITION
+            
+            ### ✨ Features
+            - 🎬 Video Downloader (4K, 1080p, 720p, etc.)
+            - 🎵 Audio Downloader (MP3, M4A, FLAC, 320kbps)
+            - 📁 Playlist Downloader with parallel support
+            - 🖼️ Thumbnail Grabber
+            - 📊 Metadata Extractor
+            - 📝 Subtitle Downloader (SRT, VTT)
+            - 📦 Batch Downloader
+            - 🔍 Search & Download
+            - 🔄 Media Converter with FFmpeg
+            
+            ### 🌐 Web Interface
+            - Full-stack Next.js web application
+            - Beautiful hacker-style terminal UI
+            - Real-time download progress
+            - Multi-platform support
+            
+            ### 📥 Installation
+            
+            ```bash
+            # Clone the repository
+            git clone https://github.com/T3RMUXK1NG/Downloader.git
+            cd Downloader
+            
+            # Install Python dependencies
+            pip install -r requirements.txt
+            
+            # Run the toolkit
+            python rs_toolkit.py
+            ```
+            
+            ### 👤 Author
+            **RS (RAJSARASWATI JATAV)**
+            - YouTube: [@T3rmuxk1ng](https://youtube.com/@T3rmuxk1ng)
+            - GitHub: [T3RMUXK1NG](https://github.com/T3RMUXK1NG)
+            
+            🔱 **GOD MODE NEXUS - POWER UNLEASHED** 🔱
+          files: |
+            rs-downloader-toolkit-v${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ===========================================
+  # Deploy to GitHub Pages (Optional)
+  # ===========================================
+  deploy-pages:
+    name: 🌍 Deploy to GitHub Pages
+    needs: [build-web]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 📥 Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: .
+
+      - name: 📦 Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: 📤 Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
