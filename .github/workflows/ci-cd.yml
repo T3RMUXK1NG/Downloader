@@ -8,6 +8,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "20"
@@ -88,6 +91,8 @@ jobs:
     needs: [test-python, build-web]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     
     steps:
       - name: 📥 Checkout Repository
@@ -125,7 +130,7 @@ jobs:
           zip -r rs-downloader-toolkit-v${{ steps.version.outputs.version }}.zip . -x ".git/*" -x "node_modules/*" -x ".next/*" -x "__pycache__/*"
 
       - name: 🚀 Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: 🔱 RS Downloader Toolkit v${{ steps.version.outputs.version }} - GOD MODE NEXUS
