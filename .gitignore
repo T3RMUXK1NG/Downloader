@@ -63,6 +63,13 @@ id_rsa
 id_ed25519
 id_rsa.pub
 
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
 # Build
 *.apk
 *.aab
