@@ -1,9 +1,9 @@
-# 🔥 RS DOWNLOADER TOOLKIT v2.1.0 - GOD MODE NEXUS 🔥
+# 🔥 RS DOWNLOADER TOOLKIT v2.2.0 - GOD MODE NEXUS 🔥
 
 <div align="center">
 
 ![RS Downloader Toolkit](https://img.shields.io/badge/RS%20DOWNLOADER-TOOLKIT-brightgreen?style=for-the-badge&logo=youtube&logoColor=white)
-![Version](https://img.shields.io/badge/VERSION-2.1.0%20GOD%20MODE%20NEXUS-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/VERSION-2.2.0%20GOD%20MODE%20NEXUS-blue?style=for-the-badge)
 ![Author](https://img.shields.io/badge/AUTHOR-RS%20(T3rmuxk1ng)-red?style=for-the-badge)
 ![Python](https://img.shields.io/badge/PYTHON-3.8+-yellow?style=for-the-badge&logo=python&logoColor=white)
 ![Node](https://img.shields.io/badge/NODE-18+-green?style=for-the-badge&logo=node.js&logoColor=white)
@@ -21,7 +21,7 @@
 
 ## 📌 About
 
-**RS Downloader Toolkit v2.1.0 GOD MODE NEXUS** is a powerful, modular YouTube and multi-platform downloader with:
+**RS Downloader Toolkit v2.2.0 GOD MODE NEXUS** is a powerful, modular YouTube and multi-platform downloader with:
 - 🖥️ **Hacker Terminal UI** - Neon green/cyan theme with Matrix-style aesthetics
 - 🌐 **Full-Stack Web Interface** - Next.js 15 with beautiful hacker-style UI
 - 📱 **Android APK** - Native Android app via Capacitor
@@ -175,7 +175,7 @@ services:
 
 ## 🌐 Web Interface
 
-The v2.1.0 GOD MODE NEXUS includes a full-stack Next.js 15 web application with:
+The v2.2.0 GOD MODE NEXUS includes a full-stack Next.js 15 web application with:
 
 - **Beautiful Hacker UI** - Dark theme with neon green accents
 - **Real-time Progress** - Live download progress tracking
@@ -324,7 +324,7 @@ Downloader/
 
 ## 🔱 GOD MODE NEXUS Features
 
-### v2.1.0 New Features
+### v2.2.0 New Features
 
 - 📱 **Android APK** - Native Android app via Capacitor
 - 🐳 **Docker Multi-Arch** - amd64, arm64, arm/v7 support
@@ -334,6 +334,8 @@ Downloader/
 - 📱 **Better Termux Support** - Optimized for mobile
 - 🎨 **Updated Theme** - GOD MODE NEXUS color scheme
 - 📦 **Smaller Bundle** - Optimized dependencies
+- ⬆️ **Updated Dependencies** - All packages updated to latest versions
+- 🔧 **Improved Workflows** - Enhanced Android APK build process
 
 ---
 
@@ -380,6 +382,6 @@ If you find this project useful, please consider giving it a star! ⭐
 
 **Made with ❤️ by RS (T3rmuxk1ng)**
 
-🔱 **GOD MODE NEXUS v2.1.0 - POWER UNLEASHED** 🔱
+🔱 **GOD MODE NEXUS v2.2.0 - POWER UNLEASHED** 🔱
 
 </div>

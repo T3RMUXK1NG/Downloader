@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Use standalone for Docker/server deployment
+  // Change to 'export' for static build (Android APK)
   output: "standalone",
 
   // TypeScript configuration
@@ -25,6 +27,14 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: '*.ytimg.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'yt3.ggpht.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'yt3.googleusercontent.com',
       },
     ],
     unoptimized: true,
@@ -63,7 +73,7 @@ const nextConfig: NextConfig = {
   // Environment variables
   env: {
     NEXT_PUBLIC_APP_NAME: 'RS Downloader Toolkit',
-    NEXT_PUBLIC_APP_VERSION: '2.1.0',
+    NEXT_PUBLIC_APP_VERSION: '2.2.0',
     NEXT_PUBLIC_AUTHOR: 'RS (T3rmuxk1ng)',
   },
 };

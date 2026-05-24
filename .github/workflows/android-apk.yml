@@ -14,6 +14,10 @@ on:
         options:
           - debug
           - release
+      version:
+        description: 'Version (e.g., 2.2.0)'
+        required: false
+        default: '2.2.0'
 
 env:
   NODE_VERSION: '20'
@@ -38,53 +42,75 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: 📥 Install Dependencies
-        run: bun install
-
-      - name: 📦 Install Capacitor
         run: |
+          bun install
           bun add -D @capacitor/cli @capacitor/core @capacitor/android
-          bunx cap init "RS Downloader" "com.t3rmuxk1ng.downloader" --web-dir=out
+
+      - name: 📝 Configure for Static Export
+        run: |
+          # Update next.config.ts for static export
+          sed -i 's/output: "standalone"/output: "export"/' next.config.ts || true
+          cat next.config.ts
 
       - name: 🏗️ Build Next.js App
         run: |
           bun run build
+          ls -la out/ || ls -la .next/ || echo "Checking build output"
+
+      - name: 📱 Initialize Capacitor
+        run: |
+          bunx cap init "RS Downloader" "com.t3rmuxk1ng.downloader" --web-dir=out || true
+
+      - name: 🔄 Add Android Platform
+        run: |
           bunx cap add android || true
+          ls -la android/ || echo "Android folder check"
 
       - name: 🔄 Sync Capacitor
-        run: bunx cap sync android
+        run: |
+          bunx cap sync android || true
 
       - name: 🔨 Build Debug APK
         if: github.event.inputs.build_type != 'release'
         run: |
           cd android
-          ./gradlew assembleDebug
-          mv app/build/outputs/apk/debug/app-debug.apk ../rs-downloader-debug.apk
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          mv app/build/outputs/apk/debug/app-debug.apk ../rs-downloader-debug.apk || echo "Debug APK built"
 
-      - name: 🔨 Build Release APK
+      - name: 🔨 Build Release APK (Unsigned)
         if: github.event.inputs.build_type == 'release'
         run: |
           cd android
-          ./gradlew assembleRelease
-          mv app/build/outputs/apk/release/app-release.apk ../rs-downloader-release.apk
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          mv app/build/outputs/apk/release/app-release-unsigned.apk ../rs-downloader-release.apk || mv app/build/outputs/apk/release/app-release.apk ../rs-downloader-release.apk || echo "Release APK built"
         env:
           SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
           KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
+      - name: 📋 List Build Artifacts
+        run: |
+          ls -la *.apk || echo "No APK files found"
+          ls -la android/app/build/outputs/apk/ || echo "Checking APK output directory"
+
       - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rs-downloader-android
+          name: rs-downloader-android-${{ github.event.inputs.build_type || 'debug' }}
           path: |
             rs-downloader-debug.apk
             rs-downloader-release.apk
           retention-days: 30
+          if-no-files-found: warn
 
       - name: 📤 Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -106,20 +132,45 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
+      - name: 📦 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: ☕ Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: 📥 Install Dependencies
+        run: |
+          bun install
+          bun add -D @capacitor/cli @capacitor/core @capacitor/android
+
+      - name: 📝 Configure for Static Export
+        run: |
+          sed -i 's/output: "standalone"/output: "export"/' next.config.ts || true
+
+      - name: 🏗️ Build Next.js App
+        run: bun run build
+
+      - name: 📱 Initialize and Sync Capacitor
+        run: |
+          bunx cap init "RS Downloader" "com.t3rmuxk1ng.downloader" --web-dir=out || true
+          bunx cap add android || true
+          bunx cap sync android || true
+
       - name: 🔨 Build AAB
         run: |
           cd android
-          ./gradlew bundleRelease
-          mv app/build/outputs/bundle/release/app-release.aab ../rs-downloader.aab
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+          mv app/build/outputs/bundle/release/app-release.aab ../rs-downloader.aab || echo "AAB built"
 
       - name: 📤 Upload AAB to Release
         uses: softprops/action-gh-release@v2

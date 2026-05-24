@@ -4,6 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.t3rmuxk1ng.downloader',
   appName: 'RS Downloader',
   webDir: 'out',
+  bundledWebRuntime: false,
   server: {
     androidScheme: 'https'
   },
