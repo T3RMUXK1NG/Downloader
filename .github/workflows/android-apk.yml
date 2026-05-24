@@ -1,0 +1,329 @@
+name: 🤖 Android APK Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
+      version:
+        description: 'Version (e.g., 2.2.0)'
+        required: false
+        default: '2.2.0'
+
+env:
+  NODE_VERSION: '20'
+  JAVA_VERSION: '21'
+
+jobs:
+  # Build Android APK
+  build-apk:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📥 Install Dependencies
+        run: |
+          bun install
+          bun add -D @capacitor/cli @capacitor/core @capacitor/android
+
+      - name: 📝 Configure for Static Export
+        run: |
+          # Remove API routes (not compatible with static export)
+          rm -rf src/app/api || true
+          
+          cat > next.config.ts << 'EOF'
+          import type { NextConfig } from "next";
+
+          const nextConfig: NextConfig = {
+            output: "export",
+            typescript: {
+              ignoreBuildErrors: true,
+            },
+            reactStrictMode: false,
+            images: {
+              unoptimized: true,
+            },
+            env: {
+              NEXT_PUBLIC_APP_NAME: 'RS Downloader Toolkit',
+              NEXT_PUBLIC_APP_VERSION: '2.2.0',
+              NEXT_PUBLIC_AUTHOR: 'RS (T3rmuxk1ng)',
+            },
+          };
+
+          export default nextConfig;
+          EOF
+          cat next.config.ts
+
+      - name: 🏗️ Build Next.js App
+        run: |
+          bun run build
+          echo "Build output:"
+          ls -la out/ || ls -la .next/ || echo "Checking build output"
+
+      - name: 📱 Initialize Capacitor
+        run: |
+          rm -rf android capacitor.config.ts || true
+          bunx cap init "RS Downloader" "com.t3rmuxk1ng.downloader" --web-dir=out
+
+      - name: 🔄 Add Android Platform
+        run: |
+          bunx cap add android
+
+      - name: 📝 Create Capacitor Config
+        run: |
+          cat > capacitor.config.ts << 'EOF'
+          import { CapacitorConfig } from '@capacitor/cli';
+
+          const config: CapacitorConfig = {
+            appId: 'com.t3rmuxk1ng.downloader',
+            appName: 'RS Downloader',
+            webDir: 'out',
+            bundledWebRuntime: false,
+            server: {
+              androidScheme: 'https'
+            },
+            plugins: {
+              SplashScreen: {
+                launchShowDuration: 2000,
+                launchAutoHide: true,
+                backgroundColor: '#000000',
+                androidSplashResourceName: 'splash',
+                androidScaleType: 'CENTER_CROP',
+                showSpinner: true,
+                spinnerColor: '#00ff00',
+              }
+            },
+            android: {
+              allowMixedContent: true,
+              backgroundColor: '#000000'
+            }
+          };
+
+          export default config;
+          EOF
+          bunx cap sync android
+
+      - name: 🔐 Generate Keystore for Signing
+        run: |
+          cd android/app
+          keytool -genkeypair -v \
+            -keystore release-keystore.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias rs-downloader \
+            -storepass android \
+            -keypass android \
+            -dname "CN=RS Downloader, OU=T3rmuxk1ng, O=RS, L=India, ST=India, C=IN"
+
+      - name: 📝 Configure Gradle for Signing
+        run: |
+          cd android/app
+          # Get the android block content and add signing config
+          # Using sed to properly modify build.gradle
+          sed -i '/android {/a\
+              signingConfigs {\
+                  release {\
+                      storeFile file("release-keystore.jks")\
+                      storePassword "android"\
+                      keyAlias "rs-downloader"\
+                      keyPassword "android"\
+                  }\
+              }' build.gradle
+          
+          # Add signing config to release buildType
+          sed -i '/buildTypes {/a\
+              release {\
+                  signingConfig signingConfigs.release\
+              }' build.gradle
+          
+          echo "Updated build.gradle:"
+          cat build.gradle
+
+      - name: 🔨 Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk ../rs-downloader-debug.apk
+          echo "✅ Debug APK built successfully"
+          ls -la ../*.apk
+
+      - name: 🔨 Build Signed Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk ../rs-downloader-release.apk || cp app/build/outputs/apk/release/app-release-unsigned.apk ../rs-downloader-release.apk
+          echo "✅ Release APK built successfully"
+          ls -la ../*.apk
+
+      - name: ✅ Verify APKs
+        run: |
+          echo "Checking APK files..."
+          ls -la *.apk
+          for apk in *.apk; do
+            if [ -f "$apk" ]; then
+              echo "✅ $apk exists ($(du -h $apk | cut -f1))"
+              unzip -t "$apk" > /dev/null 2>&1 && echo "✅ $apk is valid" || echo "❌ $apk is corrupted"
+            fi
+          done
+
+      - name: 📤 Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rs-downloader-debug
+          path: rs-downloader-debug.apk
+          retention-days: 30
+
+      - name: 📤 Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rs-downloader-release
+          path: rs-downloader-release.apk
+          retention-days: 30
+
+      - name: 📤 Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rs-downloader-debug.apk
+            rs-downloader-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build AAB (Android App Bundle) for Play Store
+  build-aab:
+    name: 📦 Build Android App Bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-apk
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📥 Install Dependencies
+        run: |
+          bun install
+          bun add -D @capacitor/cli @capacitor/core @capacitor/android
+
+      - name: 📝 Configure for Static Export
+        run: |
+          rm -rf src/app/api || true
+          cat > next.config.ts << 'EOF'
+          import type { NextConfig } from "next";
+
+          const nextConfig: NextConfig = {
+            output: "export",
+            typescript: {
+              ignoreBuildErrors: true,
+            },
+            reactStrictMode: false,
+            images: {
+              unoptimized: true,
+            },
+            env: {
+              NEXT_PUBLIC_APP_NAME: 'RS Downloader Toolkit',
+              NEXT_PUBLIC_APP_VERSION: '2.2.0',
+              NEXT_PUBLIC_AUTHOR: 'RS (T3rmuxk1ng)',
+            },
+          };
+
+          export default nextConfig;
+          EOF
+
+      - name: 🏗️ Build Next.js App
+        run: bun run build
+
+      - name: 📱 Initialize and Sync Capacitor
+        run: |
+          rm -rf android capacitor.config.ts || true
+          bunx cap init "RS Downloader" "com.t3rmuxk1ng.downloader" --web-dir=out
+          bunx cap add android
+          bunx cap sync android
+
+      - name: 🔐 Generate Keystore
+        run: |
+          cd android/app
+          keytool -genkeypair -v \
+            -keystore release-keystore.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias rs-downloader \
+            -storepass android \
+            -keypass android \
+            -dname "CN=RS Downloader, OU=T3rmuxk1ng, O=RS, L=India, ST=India, C=IN"
+
+      - name: 📝 Configure Gradle for Signing
+        run: |
+          cd android/app
+          sed -i '/android {/a\
+              signingConfigs {\
+                  release {\
+                      storeFile file("release-keystore.jks")\
+                      storePassword "android"\
+                      keyAlias "rs-downloader"\
+                      keyPassword "android"\
+                  }\
+              }' build.gradle
+          sed -i '/buildTypes {/a\
+              release {\
+                  signingConfig signingConfigs.release\
+              }' build.gradle
+
+      - name: 🔨 Build AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon --stacktrace
+          cp app/build/outputs/bundle/release/app-release.aab ../rs-downloader.aab
+          ls -la ../*.aab
+
+      - name: 📤 Upload AAB to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rs-downloader.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

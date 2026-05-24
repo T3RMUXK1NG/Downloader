@@ -1,0 +1,196 @@
+name: 🚀 Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 2.2.0)'
+        required: true
+        default: '2.2.0'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Create Release
+  create-release:
+    name: 📦 Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📌 Get Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🏷️ Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: 🔥 RS Downloader Toolkit v${{ steps.get_version.outputs.version }} - GOD MODE NEXUS
+          body: |
+            # 🔥 RS Downloader Toolkit v${{ steps.get_version.outputs.version }}
+            
+            ## 🚀 What's New in v${{ steps.get_version.outputs.version }}
+            - 🔥 **Updated Dependencies** - All npm and Python packages updated to latest versions
+            - 📱 **Improved Android APK Build** - Enhanced GitHub Actions workflow for native Android builds
+            - 🌐 **Next.js 15.5+** - Latest Next.js with improved performance
+            - 🎨 **Enhanced UI Components** - Updated Radix UI and shadcn components
+            - 🔐 **Better Security** - Updated security headers and validation
+            - 📦 **Optimized Bundle Size** - Reduced bundle size with tree-shaking
+            
+            ## 📦 Downloads
+            | Platform | File | Description |
+            |----------|------|-------------|
+            | 🌐 **Web App** | `rs-downloader-web-v*.tar.gz` | Full Next.js web application |
+            | 📱 **Android APK** | `rs-downloader-*.apk` | Native Android app (Debug & Release) |
+            | 📦 **Android AAB** | `rs-downloader.aab` | Android App Bundle for Play Store |
+            | 🐍 **Python CLI** | `rs-downloader-python-v*.tar.gz` | Python CLI toolkit |
+            | 🐳 **Docker** | `ghcr.io/t3rmuxk1ng/downloader:latest` | Docker image |
+            
+            ## 🔱 GOD MODE NEXUS Features
+            - 🎬 **Video Downloader** - Download videos in 4K, 1080p, 720p
+            - 🎵 **Audio Extractor** - Extract audio in MP3, M4A, FLAC (up to 320kbps)
+            - 📁 **Playlist Support** - Download entire playlists with parallel processing
+            - 🖼️ **Thumbnail Grabber** - Download video thumbnails in max quality
+            - 📝 **Subtitle Downloader** - Download subtitles in multiple languages
+            - 📦 **Batch Downloads** - Download multiple URLs at once
+            - 🔄 **Media Converter** - Convert, compress, trim, and merge media
+            
+            ## 🛠️ Installation
+            
+            ### Web Interface (Docker)
+            ```bash
+            docker pull ghcr.io/t3rmuxk1ng/downloader:latest
+            docker run -p 3000:3000 ghcr.io/t3rmuxk1ng/downloader:latest
+            ```
+            
+            ### Python CLI
+            ```bash
+            git clone https://github.com/T3RMUXK1NG/Downloader.git
+            cd Downloader
+            pip install -r requirements.txt
+            python rs_toolkit.py
+            ```
+            
+            ### Android APK
+            Download the APK from the assets below and install on your Android device.
+            
+            ---
+            
+            **Made with ❤️ by RS (T3rmuxk1ng)**
+            
+            **🔱 GOD MODE NEXUS - POWER UNLEASHED 🔥**
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build Web App
+  build-web:
+    name: 🌐 Build Web App
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 📥 Install Dependencies
+        run: bun install
+
+      - name: 🏗️ Build Application
+        run: bun run build
+
+      - name: 📦 Create Archive
+        run: |
+          tar -czvf rs-downloader-web-v${{ needs.create-release.outputs.version }}.tar.gz .next/ public/ package.json requirements.txt rs_toolkit.py modules/ core/ utils/
+
+      - name: 📤 Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rs-downloader-web-v${{ needs.create-release.outputs.version }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build Docker Image
+  build-docker:
+    name: 🐳 Build Docker Image
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🔐 Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🏷️ Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: 🐳 Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+
+  # Build Python Package
+  build-python:
+    name: 🐍 Build Python Package
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Create Python Archive
+        run: |
+          mkdir -p rs-downloader-python
+          cp -r modules/ core/ utils/ rs_toolkit.py requirements.txt rs-downloader-python/
+          tar -czvf rs-downloader-python-v${{ needs.create-release.outputs.version }}.tar.gz rs-downloader-python/
+
+      - name: 📤 Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rs-downloader-python-v${{ needs.create-release.outputs.version }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,22 @@
+# 🔥 RS Downloader Toolkit v2.2.0 - GOD MODE NEXUS 🔥
+# Core Dependencies
+yt-dlp>=2025.5.22
+requests>=2.32.4
+
+# UI & Terminal
+rich>=14.0.0
+colorama>=0.4.6
+
+# Optional but Recommended
+mutagen>=1.47.0       # For metadata handling
+pycryptodomex>=3.23.0 # For encrypted streams
+websockets>=15.0.1    # For WebSocket support
+brotli>=1.1.0         # For brotli compression
+certifi>=2025.4.26    # For SSL certificates
+
+# Development Dependencies
+pytest>=8.4.0
+pytest-cov>=6.2.1
+flake8>=7.2.0
+mypy>=1.16.0
+black>=25.1.0
