@@ -323,7 +323,7 @@ export default function RSDownloaderApp() {
                 <CardContent className="p-0">
                   <div className="flex flex-col md:flex-row">
                     <div className="relative aspect-video md:w-80 shrink-0">
-                      <img alt="Video thumbnail"
+                      <img
                         src={videoInfo.thumbnail}
                         alt={videoInfo.title}
                         className="w-full h-full object-cover rounded-t-lg md:rounded-l-lg md:rounded-tr-none"

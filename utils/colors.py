@@ -49,6 +49,7 @@ NEON_YELLOW = '' if _NO_COLOR else '\033[93m'
 NEON_PURPLE = '' if _NO_COLOR else '\033[95m'
 NEON_BLUE = '' if _NO_COLOR else '\033[94m'
 MATRIX_GREEN = '' if _NO_COLOR else '\033[32m'
+NEXUS_GOLD = '' if _NO_COLOR else '\033[93m\033[1m'  # Bold Yellow for NEXUS branding
 
 # Background Colors
 BG_BLACK = '' if _NO_COLOR else '\033[40m'
