@@ -1,25 +1,41 @@
-name: 🔱 GOD MODE NEXUS CI/CD
+name: 🔥 CI/CD Pipeline
 
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
-  release:
-    types: [published]
 
 env:
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "20"
+  NODE_VERSION: '20'
 
 jobs:
-  # ===========================================
-  # Python Toolkit Tests
-  # ===========================================
-  test-python:
-    name: 🐍 Test Python Toolkit
+  # Lint and Test
+  lint-test:
+    name: 🧪 Lint & Test
     runs-on: ubuntu-latest
-    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 📥 Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔍 Lint Code
+        run: bun run lint
+
+      - name: 🏗️ Build Application
+        run: bun run build
+
+  # Python Tests
+  python-test:
+    name: 🐍 Python Tests
+    runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
@@ -27,156 +43,34 @@ jobs:
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          python-version: '3.11'
 
       - name: 📦 Install Python Dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov flake8 mypy
-
-      - name: 🔍 Lint Python Code
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=src,db,.next,node_modules || true
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=src,db,.next,node_modules || true
 
       - name: 🧪 Run Python Tests
         run: |
-          python -m pytest tests/ -v --cov=. --cov-report=xml || echo "No tests yet"
+          python -m pytest tests/ -v || echo "No tests found"
 
-  # ===========================================
-  # Next.js Web App Build
-  # ===========================================
-  build-web:
-    name: 🌐 Build Next.js Web App
+  # Security Scan
+  security:
+    name: 🔐 Security Scan
     runs-on: ubuntu-latest
-    
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
+      - name: 🔐 Run Trivy Scanner
+        uses: aquasecurity/trivy-action@master
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
 
-      - name: 📦 Install Dependencies
-        run: npm ci
-
-      - name: 🔨 Build Next.js App
-        run: npm run build
-
-      - name: 🔍 Lint Code
-        run: npm run lint || true
-
-      - name: 📤 Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+      - name: 📤 Upload Security Results
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: nextjs-build
-          path: |
-            .next/
-            public/
-          retention-days: 7
-
-  # ===========================================
-  # Create Release (only on main branch push)
-  # ===========================================
-  create-release:
-    name: 🚀 Create Release
-    needs: [test-python, build-web]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-    
-    steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 📝 Get Version
-        id: version
-        run: |
-          VERSION=$(grep "VERSION = " rs_toolkit.py | head -1 | cut -d'"' -f2 | cut -d' ' -f1)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Detected version: $VERSION"
-
-      - name: 🏷️ Check if Tag Exists
-        id: check_tag
-        run: |
-          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tag v${{ steps.version.outputs.version }} already exists"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: 🏷️ Create and Push Tag
-        if: steps.check_tag.outputs.exists != 'true'
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "🔱 GOD MODE NEXUS v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
-
-      - name: 📦 Create Python Package
-        run: |
-          zip -r rs-downloader-toolkit-v${{ steps.version.outputs.version }}.zip . -x ".git/*" -x "node_modules/*" -x ".next/*" -x "__pycache__/*"
-
-      - name: 🚀 Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: 🔱 RS Downloader Toolkit v${{ steps.version.outputs.version }} - GOD MODE NEXUS
-          body: |
-            # 🔥 RS DOWNLOADER TOOLKIT v${{ steps.version.outputs.version }} 🔥
-            
-            ## GOD MODE NEXUS EDITION
-            
-            ### ✨ Features
-            - 🎬 Video Downloader (4K, 1080p, 720p, etc.)
-            - 🎵 Audio Downloader (MP3, M4A, FLAC, 320kbps)
-            - 📁 Playlist Downloader with parallel support
-            - 🖼️ Thumbnail Grabber
-            - 📊 Metadata Extractor
-            - 📝 Subtitle Downloader (SRT, VTT)
-            - 📦 Batch Downloader
-            - 🔍 Search & Download
-            - 🔄 Media Converter with FFmpeg
-            
-            ### 🌐 Web Interface
-            - Full-stack Next.js web application
-            - Beautiful hacker-style terminal UI
-            - Real-time download progress
-            - Multi-platform support
-            
-            ### 📥 Installation
-            
-            ```bash
-            # Clone the repository
-            git clone https://github.com/T3RMUXK1NG/Downloader.git
-            cd Downloader
-            
-            # Install Python dependencies
-            pip install -r requirements.txt
-            
-            # Run the toolkit
-            python rs_toolkit.py
-            ```
-            
-            ### 👤 Author
-            **RS (RAJSARASWATI JATAV)**
-            - YouTube: [@T3rmuxk1ng](https://youtube.com/@T3rmuxk1ng)
-            - GitHub: [T3RMUXK1NG](https://github.com/T3RMUXK1NG)
-            
-            🔱 **GOD MODE NEXUS - POWER UNLEASHED** 🔱
-          files: |
-            rs-downloader-toolkit-v${{ steps.version.outputs.version }}.zip
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          sarif_file: 'trivy-results.sarif'

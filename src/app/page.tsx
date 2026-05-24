@@ -247,7 +247,7 @@ export default function RSDownloaderApp() {
                 <h1 className="text-xl font-bold tracking-wider text-green-400">
                   RS DOWNLOADER TOOLKIT
                 </h1>
-                <p className="text-xs text-green-600">v2.0 GOD MODE NEXUS</p>
+                <p className="text-xs text-green-600">v2.1.0 GOD MODE NEXUS</p>
               </div>
             </div>
 
@@ -728,7 +728,7 @@ export default function RSDownloaderApp() {
       <footer className="border-t border-green-500/30 py-6 mt-8">
         <div className="container mx-auto px-4 text-center text-green-600 text-sm">
           <p>Made with ❤️ by RS (T3rmuxk1ng)</p>
-          <p className="text-xs mt-1">🔱 GOD MODE NEXUS v2.0 🔱</p>
+          <p className="text-xs mt-1">🔱 GOD MODE NEXUS v2.1.0 🔱</p>
         </div>
       </footer>
     </div>

@@ -23,7 +23,7 @@ class ConfigManager:
 
     _instance = None
     DEFAULT_CONFIG = {
-        "version": "2.0.0",
+        "version": "2.1.0",
         "author": "RS (T3rmuxk1ng)",
         "output_paths": {
             "videos": "output/videos",

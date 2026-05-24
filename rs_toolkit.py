@@ -20,14 +20,14 @@
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  AUTHOR  : RS (RAJSARASWATI JATAV)                                           ║
 ║  CHANNEL : T3rmuxk1ng (YouTube)                                              ║
-║  VERSION : 2.0.0 GOD MODE NEXUS EDITION                                      ║
+║  VERSION : 2.1.0 GOD MODE NEXUS                                              ║
 ║  GITHUB  : github.com/T3RMUXK1NG/Downloader                                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-🔥 RS DOWNLOADER TOOLKIT v2.0 - GOD MODE NEXUS EDITION 🔥
+🔥 RS DOWNLOADER TOOLKIT v2.1.0 - GOD MODE NEXUS 🔥
    Full Hacker Style Terminal UI | All Features Included
    Termux Compatible | FFmpeg Integration | Modular Architecture
-   Multi-Platform Support | Advanced Features | Next Level Power
+   Multi-Platform Support | Android APK | Docker | Advanced Features
 """
 
 import os
@@ -60,10 +60,10 @@ class RSDownloaderToolkit:
     """
     RS YouTube Downloader Toolkit - Main Controller
     Author: RS (T3rmuxk1ng)
-    Version: 2.0.0 GOD MODE NEXUS EDITION
+    Version: 2.1.0 GOD MODE NEXUS
     """
 
-    VERSION = "2.0.0 GOD MODE NEXUS EDITION"
+    VERSION = "2.1.0 GOD MODE NEXUS"
     AUTHOR = "RS (RAJSARASWATI JATAV)"
     CHANNEL = "T3rmuxk1ng"
     GITHUB = "github.com/T3RMUXK1NG/Downloader"

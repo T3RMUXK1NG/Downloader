@@ -49,7 +49,7 @@ BANNERS = [
 # Mini Banner
 MINI_BANNER = r'''
    ╔═════════════════════════════════════════╗
-   ║   🔥 RS DOWNLOADER TOOLKIT v2.0.0 🔥   ║
+   ║   🔥 RS DOWNLOADER TOOLKIT v2.1.0 🔥   ║
    ║   Author: T3rmuxk1ng                   ║
    ╚═════════════════════════════════════════╝
 '''
@@ -76,7 +76,7 @@ ABOUT_BANNER = r'''
    ║  AUTHOR   : RAJSARASWATI JATAV (RS)                           ║
    ║  CHANNEL  : T3rmuxk1ng (YouTube)                              ║
    ║  GITHUB   : github.com/T3RMUXK1NG                             ║
-   ║  VERSION  : 2.0.0 GOD MODE NEXUS                               ║
+   ║  VERSION  : 2.1.0 GOD MODE NEXUS                               ║
    ║  STATUS   : 🔥 LEGENDARY EXPERT 🔥                            ║
    ╚═══════════════════════════════════════════════════════════════╝
 '''
@@ -104,7 +104,7 @@ def show_banner():
     print(f"{NEON_CYAN}{line}{RESET}")
     print(f"{NEON_GREEN}  AUTHOR  : {BRIGHT_WHITE}RS (RAJSARASWATI JATAV){RESET}")
     print(f"{NEON_GREEN}  CHANNEL : {BRIGHT_WHITE}T3rmuxk1ng (YouTube){RESET}")
-    print(f"{NEON_GREEN}  VERSION : {BRIGHT_WHITE}2.0.0 GOD MODE NEXUS{RESET}")
+    print(f"{NEON_GREEN}  VERSION : {BRIGHT_WHITE}2.1.0 GOD MODE NEXUS{RESET}")
     print(f"{NEON_GREEN}  GITHUB  : {BRIGHT_WHITE}github.com/T3RMUXK1NG/Downloader{RESET}")
     print(f"{NEON_CYAN}{line}{RESET}")
 

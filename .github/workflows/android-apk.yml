@@ -1,0 +1,129 @@
+name: 🤖 Android APK Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+env:
+  NODE_VERSION: '20'
+  JAVA_VERSION: '17'
+
+jobs:
+  # Build Android APK
+  build-apk:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📥 Install Dependencies
+        run: bun install
+
+      - name: 📦 Install Capacitor
+        run: |
+          bun add -D @capacitor/cli @capacitor/core @capacitor/android
+          bunx cap init "RS Downloader" "com.t3rmuxk1ng.downloader" --web-dir=out
+
+      - name: 🏗️ Build Next.js App
+        run: |
+          bun run build
+          bunx cap add android || true
+
+      - name: 🔄 Sync Capacitor
+        run: bunx cap sync android
+
+      - name: 🔨 Build Debug APK
+        if: github.event.inputs.build_type != 'release'
+        run: |
+          cd android
+          ./gradlew assembleDebug
+          mv app/build/outputs/apk/debug/app-debug.apk ../rs-downloader-debug.apk
+
+      - name: 🔨 Build Release APK
+        if: github.event.inputs.build_type == 'release'
+        run: |
+          cd android
+          ./gradlew assembleRelease
+          mv app/build/outputs/apk/release/app-release.apk ../rs-downloader-release.apk
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: 📤 Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rs-downloader-android
+          path: |
+            rs-downloader-debug.apk
+            rs-downloader-release.apk
+          retention-days: 30
+
+      - name: 📤 Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rs-downloader-debug.apk
+            rs-downloader-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build AAB (Android App Bundle) for Play Store
+  build-aab:
+    name: 📦 Build Android App Bundle
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-apk
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 🔨 Build AAB
+        run: |
+          cd android
+          ./gradlew bundleRelease
+          mv app/build/outputs/bundle/release/app-release.aab ../rs-downloader.aab
+
+      - name: 📤 Upload AAB to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rs-downloader.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
