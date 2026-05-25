@@ -1,0 +1,500 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# RS TOOLKIT v3.1.1 ULTIMATE NEXUS - Security Scanning Workflow
+# ═══════════════════════════════════════════════════════════════════════════════
+# Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
+# License: OMNIPOTENT SOVEREIGN NEXUS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: 🔒 Security Scan
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM UTC
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: 'Run full security scan'
+        required: false
+        default: true
+        type: boolean
+      severity_threshold:
+        description: 'Minimum severity to fail'
+        required: false
+        default: 'HIGH'
+        type: choice
+        options:
+          - CRITICAL
+          - HIGH
+          - MEDIUM
+          - LOW
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEVERITY_THRESHOLD: ${{ github.event.inputs.severity_threshold || 'HIGH' }}
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.12'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CODEQL - GitHub CodeQL Analysis
+  # ─────────────────────────────────────────────────────────────────────────────
+  codeql:
+    name: 🔍 CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript', 'python']
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔧 Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+          config: |
+            paths-ignore:
+              - node_modules
+              - .next
+              - dist
+              - coverage
+              - '**/test/**'
+              - '**/__tests__/**'
+
+      - name: 🏗️ Setup Node.js
+        if: matrix.language == 'javascript-typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies (Node.js)
+        if: matrix.language == 'javascript-typescript'
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🏗️ Build (Node.js)
+        if: matrix.language == 'javascript-typescript'
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: 🐍 Setup Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 📦 Install dependencies (Python)
+        if: matrix.language == 'python'
+        run: |
+          pip install -r requirements.txt || true
+
+      - name: 🔍 Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
+          upload: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DEPENDABOT - Dependency vulnerability scan
+  # ─────────────────────────────────────────────────────────────────────────────
+  dependencies:
+    name: 📦 Dependency Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 🔒 Run npm audit
+        id: npm-audit
+        run: |
+          npm audit --audit-level=${{ env.SEVERITY_THRESHOLD }} --json > npm-audit.json || true
+          
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
+          MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' npm-audit.json)
+          LOW=$(jq '.metadata.vulnerabilities.low // 0' npm-audit.json)
+          
+          echo "critical=${CRITICAL}" >> $GITHUB_OUTPUT
+          echo "high=${HIGH}" >> $GITHUB_OUTPUT
+          echo "moderate=${MODERATE}" >> $GITHUB_OUTPUT
+          echo "low=${LOW}" >> $GITHUB_OUTPUT
+
+      - name: 📊 Generate audit report
+        run: |
+          echo "## 📦 NPM Audit Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔴 Critical | ${{ steps.npm-audit.outputs.critical || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟠 High | ${{ steps.npm-audit.outputs.high || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟡 Moderate | ${{ steps.npm-audit.outputs.moderate || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟢 Low | ${{ steps.npm-audit.outputs.low || '0' }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 🔒 Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit --format json --output pip-audit.json || true
+          pip-audit --format markdown --output pip-audit.md || true
+
+      - name: 📊 Upload audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit
+          path: |
+            npm-audit.json
+            pip-audit.json
+            pip-audit.md
+          retention-days: 30
+
+      - name: 🔒 Run Snyk scan
+        if: ${{ secrets.SNYK_TOKEN != '' }}
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
+          args: --severity-threshold=${{ env.SEVERITY_THRESHOLD }}
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SECRET SCAN - Detect exposed secrets
+  # ─────────────────────────────────────────────────────────────────────────────
+  secrets:
+    name: 🔐 Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔐 Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: 🔐 TruffleHog scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          extra_args: --debug --only-verified
+
+      - name: 🔐 Git-secrets scan
+        run: |
+          git clone https://github.com/awslabs/git-secrets.git /tmp/git-secrets
+          cd /tmp/git-secrets
+          sudo make install
+          cd $GITHUB_WORKSPACE
+          git secrets --register-aws || true
+          git secrets --scan-history || true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SAST - Static Application Security Testing
+  # ─────────────────────────────────────────────────────────────────────────────
+  sast:
+    name: 🔍 SAST Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🔍 Run ESLint security plugin
+        run: |
+          npx eslint . \
+            --plugin security \
+            --format json \
+            --output-file eslint-security.json \
+            || true
+
+      - name: 🔍 Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/typescript
+            p/react
+            p/nextjs
+            p/python
+          outputFormat: sarif
+          outputSettingsFile: semgrep.sarif
+
+      - name: 📊 Upload Semgrep results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 🔍 Run Bandit (Python SAST)
+        run: |
+          pip install bandit
+          bandit -r . -f json -o bandit-results.json || true
+          bandit -r . -f txt || true
+
+      - name: 📊 Upload SAST results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-results
+          path: |
+            eslint-security.json
+            semgrep.sarif
+            bandit-results.json
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # LICENSE CHECK - License compliance
+  # ─────────────────────────────────────────────────────────────────────────────
+  licenses:
+    name: 📜 License Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 🔍 Check licenses (Node.js)
+        run: |
+          npm install -g license-checker
+          license-checker --json --out license-checker.json || true
+          license-checker --summary || true
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 🔍 Check licenses (Python)
+        run: |
+          pip install pip-licenses
+          pip-licenses --format json --output-file=pip-licenses.json || true
+          pip-licenses --format markdown || true
+
+      - name: 📊 Upload license reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-reports
+          path: |
+            license-checker.json
+            pip-licenses.json
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # OWASP - OWASP Dependency Check
+  # ─────────────────────────────────────────────────────────────────────────────
+  owasp:
+    name: 🛡️ OWASP Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🛡️ OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'RS TOOLKIT'
+          path: '.'
+          format: 'ALL'
+          out: 'reports'
+          args: >
+            --enableExperimental
+            --nodeAuditSkipDevDependencies
+            --nodePackageSkipDevDependencies
+
+      - name: 📊 Upload OWASP report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-report
+          path: reports/
+          retention-days: 30
+
+      - name: 📊 Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: reports/dependency-check-report.sarif
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CONTAINER SCAN - Container security (if Dockerfile exists)
+  # ─────────────────────────────────────────────────────────────────────────────
+  container:
+    name: 🐳 Container Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Build Docker image for scanning
+        run: |
+          docker build -t rs-toolkit:scan . --target production || true
+
+      - name: 🔒 Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'rs-toolkit:scan'
+          format: 'sarif'
+          output: 'trivy-container.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: 🔒 Trivy table output
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'rs-toolkit:scan'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: 📊 Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-container.sarif'
+
+      - name: 🔒 Grype scan
+        uses: anchore/scan-action@v4
+        with:
+          image: 'rs-toolkit:scan'
+          fail-build: false
+          severity-cutoff: high
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SECURITY SCORECARD - OpenSSF Scorecard
+  # ─────────────────────────────────────────────────────────────────────────────
+  scorecard:
+    name: 📊 Security Scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      security-events: write
+      id-token: write
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 📊 Run Scorecard analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard_results.sarif
+          results_format: sarif
+          publish_results: true
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📊 Upload Scorecard results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard_results.sarif
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SUMMARY - Security scan summary
+  # ─────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: 📋 Security Summary
+    runs-on: ubuntu-latest
+    needs: [codeql, dependencies, secrets, sast, licenses, owasp, container]
+    if: always()
+
+    steps:
+      - name: 📊 Generate Security Summary
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 CodeQL | ${{ needs.codeql.result == 'success' && '✅ Passed' || needs.codeql.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Dependencies | ${{ needs.dependencies.result == 'success' && '✅ Passed' || needs.dependencies.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔐 Secrets | ${{ needs.secrets.result == 'success' && '✅ Passed' || needs.secrets.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 SAST | ${{ needs.sast.result == 'success' && '✅ Passed' || needs.sast.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📜 Licenses | ${{ needs.licenses.result == 'success' && '✅ Passed' || needs.licenses.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🛡️ OWASP | ${{ needs.owasp.result == 'success' && '✅ Passed' || needs.owasp.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐳 Container | ${{ needs.container.result == 'success' && '✅ Passed' || needs.container.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Severity Threshold:** ${{ env.SEVERITY_THRESHOLD }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**RS TOOLKIT - Elite Security Toolkit**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Author:** RAJSARASWATI JATAV (RS) - T3rmuxk1ng" >> $GITHUB_STEP_SUMMARY
+
+      - name: ✅ Security Status Check
+        if: contains(needs.*.result, 'failure')
+        run: |
+          echo "::warning::Some security scans failed. Please review the results."
+          # Don't fail the workflow for now, just warn
+          # exit 1

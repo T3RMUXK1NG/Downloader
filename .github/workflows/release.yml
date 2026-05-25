@@ -1,0 +1,454 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# RS TOOLKIT v3.1.1 ULTIMATE NEXUS - Automated Release Workflow
+# ═══════════════════════════════════════════════════════════════════════════════
+# Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
+# License: OMNIPOTENT SOVEREIGN NEXUS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: 🚀 Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - prerelease
+      prerelease:
+        description: 'Pre-release version'
+        required: false
+        default: ''
+        type: string
+      draft:
+        description: 'Create as draft release'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.12'
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PREPARE - Version and changelog preparation
+  # ─────────────────────────────────────────────────────────────────────────────
+  prepare:
+    name: 📋 Prepare Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 📋 Get version info
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Tag push
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          else
+            # Manual dispatch
+            VERSION=$(node -p "require('./package.json').version")
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "📦 Version: ${VERSION}"
+          echo "🏷️ Tag: ${TAG}"
+
+      - name: 📝 Generate changelog
+        id: changelog
+        run: |
+          # Generate changelog from git commits
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges 2>/dev/null || echo "- Initial release")
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges -20 2>/dev/null || echo "- Initial release")
+          fi
+          
+          # Save changelog to file for multiline output
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 📝 Update CHANGELOG.md
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          DATE=$(date +%Y-%m-%d)
+          
+          # Create changelog entry
+          if [ -f CHANGELOG.md ]; then
+            # Prepend to existing changelog
+            sed -i "1i ## [${VERSION}] - ${DATE}\n\n${{ steps.changelog.outputs.changelog }}\n" CHANGELOG.md
+          else
+            # Create new changelog
+            echo "# Changelog\n\n## [${VERSION}] - ${DATE}\n\n${{ steps.changelog.outputs.changelog }}\n" > CHANGELOG.md
+          fi
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: update changelog for ${TAG}" || echo "No changes to commit"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # BUILD - Multi-platform builds
+  # ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: 🏗️ Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    needs: [prepare]
+
+    strategy:
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-latest
+            arch: x64
+          - target: linux-arm64
+            os: ubuntu-latest
+            arch: arm64
+          - target: macos-x64
+            os: macos-latest
+            arch: x64
+          - target: macos-arm64
+            os: macos-latest
+            arch: arm64
+          - target: windows-x64
+            os: windows-latest
+            arch: x64
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🏗️ Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: 📦 Create distribution package
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          DIST_NAME="rs-toolkit-v${VERSION}-${{ matrix.target }}"
+          
+          mkdir -p dist/${DIST_NAME}
+          cp -r .next dist/${DIST_NAME}/
+          cp -r public dist/${DIST_NAME}/
+          cp package.json dist/${DIST_NAME}/
+          cp README.md dist/${DIST_NAME}/ || true
+          cp LICENSE dist/${DIST_NAME}/ || true
+          
+          # Create archive
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            7z a -tzip "${DIST_NAME}.zip" dist/${DIST_NAME}/*
+          else
+            tar -czvf "${DIST_NAME}.tar.gz" -C dist ${DIST_NAME}
+          fi
+
+      - name: 📤 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: |
+            *.tar.gz
+            *.zip
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DOCKER - Build and push Docker images
+  # ─────────────────────────────────────────────────────────────────────────────
+  docker:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [prepare]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔐 Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏗️ Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 📦 Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+
+      - name: 🏗️ Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # APK - Build Android APK
+  # ─────────────────────────────────────────────────────────────────────────────
+  apk:
+    name: 📱 Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [prepare]
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: ☕ Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🔨 Build Next.js static export
+        run: npm run build
+
+      - name: 📱 Setup Capacitor
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: 🔨 Build Release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --parallel --build-cache
+
+      - name: 📦 Sign APK
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          alias: ${{ secrets.ANDROID_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - name: 📦 Rename APK
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          APK_FILE=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
+          if [ -f "$APK_FILE" ]; then
+            NEW_NAME="rs-toolkit-v${VERSION}.apk"
+            cp "$APK_FILE" "$NEW_NAME"
+          fi
+
+      - name: 📤 Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: '*.apk'
+          retention-days: 90
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # RELEASE - Create GitHub Release
+  # ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: 🚀 Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [prepare, build, docker, apk]
+    if: always() && !contains(needs.*.result, 'failure')
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📥 Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: 📋 Prepare release assets
+        run: |
+          mkdir -p ./release-assets
+          find ./artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.apk" \) -exec cp {} ./release-assets/ \;
+          ls -la ./release-assets/
+
+      - name: 🚀 Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: RS TOOLKIT ${{ needs.prepare.outputs.tag }} - ULTIMATE NEXUS
+          body: |
+            ## 🚀 RS TOOLKIT ${{ needs.prepare.outputs.version }} - ULTIMATE NEXUS
+            
+            ### 📱 Features
+            - Elite Security Toolkit by RAJSARASWATI JATAV (RS) - T3rmuxk1ng
+            - Media Downloader (50+ Platforms)
+            - Multi-format Support (Video/Audio/Image)
+            - Batch Download with Progress Tracking
+            - Video/Audio Processing with FFmpeg
+            - AI Integration Ready
+            - Cloud Sync Support
+            - Offline Mode Capable
+            - Cross-platform (Linux, macOS, Windows, Android)
+            
+            ### 📦 Downloads
+            | Platform | Architecture | File |
+            |----------|-------------|------|
+            | Linux | x64 | `rs-toolkit-v${{ needs.prepare.outputs.version }}-linux-x64.tar.gz` |
+            | Linux | ARM64 | `rs-toolkit-v${{ needs.prepare.outputs.version }}-linux-arm64.tar.gz` |
+            | macOS | x64 | `rs-toolkit-v${{ needs.prepare.outputs.version }}-macos-x64.tar.gz` |
+            | macOS | ARM64 | `rs-toolkit-v${{ needs.prepare.outputs.version }}-macos-arm64.tar.gz` |
+            | Windows | x64 | `rs-toolkit-v${{ needs.prepare.outputs.version }}-windows-x64.zip` |
+            | Android | Universal | `rs-toolkit-v${{ needs.prepare.outputs.version }}.apk` |
+            
+            ### 🐳 Docker
+            ```bash
+            docker pull ghcr.io/t3rmuxk1ng/rs-toolkit:${{ needs.prepare.outputs.version }}
+            ```
+            
+            ### 📝 Changelog
+            ${{ needs.prepare.outputs.changelog }}
+            
+            ### 👤 Author
+            **RAJSARASWATI JATAV (RS) - T3rmuxk1ng**
+            
+            ---
+            
+            **License:** OMNIPOTENT SOVEREIGN NEXUS
+          files: ./release-assets/*
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ contains(needs.prepare.outputs.version, '-') }}
+          generate_release_notes: true
+          discussion_category_name: Releases
+
+      - name: 🎉 Release Summary
+        run: |
+          echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ needs.prepare.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Assets" >> $GITHUB_STEP_SUMMARY
+          ls -la ./release-assets/ >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # NOTIFY - Send notifications
+  # ─────────────────────────────────────────────────────────────────────────────
+  notify:
+    name: 📢 Notify
+    runs-on: ubuntu-latest
+    needs: [release]
+    if: success()
+
+    steps:
+      - name: 📢 Discord Notification
+        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: |
+            🚀 **RS TOOLKIT ${{ needs.prepare.outputs.version }} Released!**
+            
+            📱 New version available with exciting features!
+            
+            📦 Download: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }}
+            
+            👤 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: 📢 Slack Notification
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: |
+            🚀 RS TOOLKIT ${{ needs.prepare.outputs.version }} Released!
+            📦 Download: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}

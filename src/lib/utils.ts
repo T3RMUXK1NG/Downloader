@@ -26,6 +26,9 @@ import {
   LogEntry,
 } from '@/types/api';
 
+// Re-export types for use in other modules
+export { AuthLevel, RateLimitTier } from '@/types/api';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════

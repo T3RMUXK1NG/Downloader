@@ -6,12 +6,16 @@ Comprehensive media downloading and processing toolkit with:
 - Multi-platform video/audio downloading
 - Playlist processing with parallel downloads
 - Thumbnail extraction and metadata management
-- Subtitle downloading with translation support
-- Batch processing with progress tracking
+- Subtitle downloading with translation support (100+ languages)
+- Batch processing with ML-powered smart scheduling
 - Media format conversion
-- Proxy and cookie support
-- Retry mechanisms with exponential backoff
-- Rate limiting and bandwidth control
+- AI-powered video summarization
+- Cloud storage integration (Google Drive, Dropbox, Mega)
+- Live stream recording
+- Video editing capabilities
+- Audio enhancement with AI
+- Advanced thumbnail generation
+- Metadata enrichment
 
 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
 """
@@ -75,6 +79,137 @@ from .media_converter import (
     ConversionFormat,
     ConversionPreset,
     ConversionResult,
+)
+
+# New advanced modules - ULTIMATE NEXUS v3.0.1
+from .live_stream import (
+    LiveStreamRecorder,
+    StreamPlatform,
+    StreamQuality,
+    StreamStatus,
+    StreamInfo,
+    RecordingProgress,
+    RecordingResult,
+    RecordingConfig,
+    StreamDetector,
+    record_stream,
+)
+from .ai_tools import (
+    AITools,
+    AIProvider,
+    AIConfig,
+    Language,
+    SummaryLength,
+    SentimentType,
+    SummarizationResult,
+    TranslationResult,
+    SentimentResult,
+    KeywordExtractionResult,
+    ContentAnalysisResult,
+    summarize_text,
+    translate_text,
+    analyze_text,
+)
+from .cloud_sync import (
+    CloudSync,
+    CloudProvider,
+    CloudConfig,
+    CloudFile,
+    SyncDirection,
+    ConflictResolution,
+    TransferStatus,
+    TransferProgress,
+    TransferResult,
+    SyncResult,
+    upload_to_cloud,
+    download_from_cloud,
+)
+from .video_editor import (
+    VideoEditor,
+    VideoCodec,
+    AudioCodec,
+    VideoFilter,
+    TransitionType,
+    VideoInfo,
+    TrimConfig,
+    MergeConfig,
+    EffectConfig,
+    WatermarkConfig,
+    EditProgress,
+    EditResult,
+    trim_video,
+    merge_videos,
+)
+from .audio_enhancer import (
+    AudioEnhancer,
+    AudioFormat,
+    EnhancementType,
+    NoiseProfile,
+    EnhanceStatus,
+    AudioInfo,
+    EnhancementConfig,
+    EnhancementProgress,
+    EnhancementResult,
+    AudioAnalysis,
+    reduce_audio_noise,
+    normalize_audio,
+)
+from .subtitle_ai import (
+    SubtitleAI,
+    SubtitleFormat,
+    SubtitleLanguage,
+    SubtitleStatus,
+    SubtitleEntry,
+    SubtitleConfig,
+    SubtitleProgress,
+    SubtitleResult,
+    generate_subtitles,
+)
+from .proxy_manager import (
+    ProxyManager,
+    ProxyType,
+    ProxyStatus,
+    RotationStrategy,
+    ProxyInfo,
+    ProxyPoolConfig,
+    ProxyTestResult,
+    create_proxy_manager,
+)
+from .scheduler import (
+    DownloadScheduler,
+    ScheduleType,
+    TaskStatus,
+    TaskPriority,
+    ScheduledTask,
+    ScheduleConfig,
+    TaskResult,
+    SchedulerStats,
+)
+from .analytics import (
+    Analytics,
+    TimePeriod,
+    DownloadStatus,
+    ReportFormat,
+    DownloadRecord,
+    PlatformStats,
+    TimeBasedStats,
+    AnalyticsSummary,
+    ReportConfig,
+    create_analytics,
+)
+from .security import (
+    SecurityTools,
+    HashAlgorithm,
+    EncryptionAlgorithm,
+    SecurityLevel,
+    ThreatLevel,
+    HashResult,
+    VerificationResult,
+    EncryptionResult,
+    URLValidationResult,
+    FileIntegrityReport,
+    hash_file,
+    verify_file_hash,
 )
 
 # Common utilities and types
@@ -239,4 +374,133 @@ __all__ = [
     "ConversionFormat",
     "ConversionPreset",
     "ConversionResult",
+    
+    # Live Stream Recording (NEW v3.0.1)
+    "LiveStreamRecorder",
+    "StreamPlatform",
+    "StreamQuality",
+    "StreamStatus",
+    "StreamInfo",
+    "RecordingProgress",
+    "RecordingResult",
+    "RecordingConfig",
+    "StreamDetector",
+    "record_stream",
+    
+    # AI Tools (NEW v3.0.1)
+    "AITools",
+    "AIProvider",
+    "AIConfig",
+    "Language",
+    "SummaryLength",
+    "SentimentType",
+    "SummarizationResult",
+    "TranslationResult",
+    "SentimentResult",
+    "KeywordExtractionResult",
+    "ContentAnalysisResult",
+    "summarize_text",
+    "translate_text",
+    "analyze_text",
+    
+    # Cloud Sync (NEW v3.0.1)
+    "CloudSync",
+    "CloudProvider",
+    "CloudConfig",
+    "CloudFile",
+    "SyncDirection",
+    "ConflictResolution",
+    "TransferStatus",
+    "TransferProgress",
+    "TransferResult",
+    "SyncResult",
+    "upload_to_cloud",
+    "download_from_cloud",
+    
+    # Video Editor (NEW v3.0.1)
+    "VideoEditor",
+    "VideoCodec",
+    "AudioCodec",
+    "VideoFilter",
+    "TransitionType",
+    "VideoInfo",
+    "TrimConfig",
+    "MergeConfig",
+    "EffectConfig",
+    "WatermarkConfig",
+    "EditProgress",
+    "EditResult",
+    "trim_video",
+    "merge_videos",
+    
+    # Audio Enhancer (NEW v3.0.1)
+    "AudioEnhancer",
+    "AudioFormat",
+    "EnhancementType",
+    "NoiseProfile",
+    "EnhanceStatus",
+    "AudioInfo",
+    "EnhancementConfig",
+    "EnhancementProgress",
+    "EnhancementResult",
+    "AudioAnalysis",
+    "reduce_audio_noise",
+    "normalize_audio",
+    
+    # Subtitle AI (NEW v3.0.1)
+    "SubtitleAI",
+    "SubtitleFormat",
+    "SubtitleLanguage",
+    "SubtitleStatus",
+    "SubtitleEntry",
+    "SubtitleConfig",
+    "SubtitleProgress",
+    "SubtitleResult",
+    "generate_subtitles",
+    
+    # Proxy Manager (NEW v3.0.1)
+    "ProxyManager",
+    "ProxyType",
+    "ProxyStatus",
+    "RotationStrategy",
+    "ProxyInfo",
+    "ProxyPoolConfig",
+    "ProxyTestResult",
+    "create_proxy_manager",
+    
+    # Scheduler (NEW v3.0.1)
+    "DownloadScheduler",
+    "ScheduleType",
+    "TaskStatus",
+    "TaskPriority",
+    "ScheduledTask",
+    "ScheduleConfig",
+    "TaskResult",
+    "SchedulerStats",
+    
+    # Analytics (NEW v3.0.1)
+    "Analytics",
+    "TimePeriod",
+    "DownloadStatus",
+    "ReportFormat",
+    "DownloadRecord",
+    "PlatformStats",
+    "TimeBasedStats",
+    "AnalyticsSummary",
+    "ReportConfig",
+    "create_analytics",
+    
+    # Security (NEW v3.0.1)
+    "SecurityTools",
+    "HashAlgorithm",
+    "EncryptionAlgorithm",
+    "SecurityLevel",
+    "ThreatLevel",
+    "HashResult",
+    "VerificationResult",
+    "EncryptionResult",
+    "URLValidationResult",
+    "FileIntegrityReport",
+    "hash_file",
+    "verify_file_hash",
 ]
