@@ -4,7 +4,7 @@
 OMNIPOTENT SOVEREIGN NEXUS - Core Package Initialization
 =========================================================
 
-Version: 3.0.1 ULTIMATE NEXUS
+Version: 3.2.0 ULTIMATE NEXUS
 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
 License: OMNIPOTENT SOVEREIGN LICENSE
 
@@ -45,8 +45,8 @@ import platform
 # VERSION INFORMATION - SINGLE SOURCE OF TRUTH
 # =============================================================================
 
-__version__: Final[str] = "3.0.1"
-__version_info__: Final[tuple[int, int, int]] = (3, 0, 1)
+__version__: Final[str] = "3.2.0"
+__version_info__: Final[tuple[int, int, int]] = (3, 2, 0)
 __release_name__: Final[str] = "ULTIMATE NEXUS"
 __author__: Final[str] = "RAJSARASWATI JATAV (RS)"
 __author_alias__: Final[str] = "T3rmuxk1ng"

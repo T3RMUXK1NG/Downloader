@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   ANALYTICS SERVICE v3.0.1 ULTIMATE NEXUS                     ║
+ * ║                   ANALYTICS SERVICE v3.2.0 ULTIMATE NEXUS                     ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite analytics and reporting service                          ║
  * ║  Features: Metrics, Reports, Dashboards, Export, Real-time tracking          ║
+ * ║            ML Insights, Anomaly Detection, Predictive Analytics              ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/analyticsService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 

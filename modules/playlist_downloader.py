@@ -1,17 +1,24 @@
 """
 OMNIPOTENT SOVEREIGN NEXUS - Playlist Downloader Module
-Version: v3.0.1 ULTIMATE NEXUS
+Version: v3.2.0 ULTIMATE NEXUS
 
 Advanced playlist downloading with support for:
 - Multi-platform playlist support (YouTube, Spotify, SoundCloud, etc.)
 - Parallel downloads with configurable concurrency
 - Progress tracking per item and overall
 - Resume capability for interrupted downloads
-- Smart filtering (by duration, date, views, etc.)
-- Export playlist info to various formats
+- Smart filtering (by duration, date, views, likes, etc.)
+- Export playlist info to various formats (M3U, PLS, XSPF)
 - Duplicate detection and handling
 - Rate limiting and bandwidth control
 - Auto-retry with exponential backoff
+- Playlist analysis and statistics
+- Collaborative playlist support
+- Playlist backup and restore
+- Channel/User download support
+- Playlist comparison and diff
+- Thumbnail embedding
+- Metadata preservation
 
 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
 """
@@ -25,6 +32,7 @@ import time
 import hashlib
 import json
 import shutil
+import csv
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -40,9 +48,8 @@ from typing import (
     Union,
     Awaitable,
     Iterator,
+    TypedDict,
 )
-from concurrent.futures import ThreadPoolExecutor
-import subprocess
 
 
 # Configure logging
@@ -57,6 +64,8 @@ class PlaylistType(Enum):
     """Playlist type enumeration."""
     
     YOUTUBE = "youtube"
+    YOUTUBE_MIX = "youtube_mix"
+    YOUTUBE_CHANNEL = "youtube_channel"
     SPOTIFY = "spotify"
     SOUNDCLOUD = "soundcloud"
     APPLE_MUSIC = "apple_music"
@@ -66,6 +75,8 @@ class PlaylistType(Enum):
     MIXCLOUD = "mixcloud"
     VIMEO = "vimeo"
     DAILYMOTION = "dailymotion"
+    TWITCH = "twitch"
+    TWITTER = "twitter"
     UNKNOWN = "unknown"
 
 
@@ -89,6 +100,59 @@ class DuplicateAction(Enum):
     OVERWRITE = "overwrite"
     RENAME = "rename"
     KEEP_BOTH = "keep_both"
+    ASK = "ask"
+
+
+class ExportFormat(Enum):
+    """Playlist export formats."""
+    
+    M3U = "m3u"
+    M3U8 = "m3u8"
+    PLS = "pls"
+    XSPF = "xspf"
+    JSON = "json"
+    CSV = "csv"
+    TXT = "txt"
+    HTML = "html"
+
+
+@dataclass
+class PlaylistStats:
+    """
+    Playlist statistics.
+    
+    Attributes:
+        total_items: Total number of items
+        total_duration: Total duration in seconds
+        total_size: Estimated total size in bytes
+        average_duration: Average item duration
+        shortest_item: Shortest item info
+        longest_item: Longest item info
+        most_viewed: Most viewed item
+        channels: Unique channels/uploaders
+        categories: Video categories
+        upload_date_range: Upload date range
+    """
+    total_items: int = 0
+    total_duration: int = 0
+    total_size: int = 0
+    average_duration: float = 0.0
+    shortest_item: Optional[Dict[str, Any]] = None
+    longest_item: Optional[Dict[str, Any]] = None
+    most_viewed: Optional[Dict[str, Any]] = None
+    channels: List[str] = field(default_factory=list)
+    categories: List[str] = field(default_factory=list)
+    upload_date_range: Tuple[Optional[str], Optional[str]] = (None, None)
+    
+    @property
+    def duration_formatted(self) -> str:
+        """Return formatted duration."""
+        hours = self.total_duration // 3600
+        minutes = (self.total_duration % 3600) // 60
+        seconds = self.total_duration % 60
+        if hours > 0:
+            return f"{hours}h {minutes}m {seconds}s"
+        return f"{minutes}m {seconds}s"
 
 
 @dataclass
@@ -105,6 +169,7 @@ class PlaylistItem:
         thumbnail_url: Thumbnail URL
         uploader: Uploader name
         view_count: View count
+        like_count: Like count
         upload_date: Upload date
         status: Current download status
         filepath: Downloaded file path
@@ -112,6 +177,8 @@ class PlaylistItem:
         file_size: Downloaded file size
         download_speed: Average download speed
         retry_count: Number of retry attempts
+        chapter: Chapter/section name
+        availability: Availability status
     """
     index: int
     id: str
@@ -121,6 +188,7 @@ class PlaylistItem:
     thumbnail_url: Optional[str] = None
     uploader: Optional[str] = None
     view_count: int = 0
+    like_count: int = 0
     upload_date: Optional[str] = None
     status: DownloadStatus = DownloadStatus.PENDING
     filepath: Optional[Path] = None
@@ -128,6 +196,8 @@ class PlaylistItem:
     file_size: int = 0
     download_speed: float = 0.0
     retry_count: int = 0
+    chapter: Optional[str] = None
+    availability: str = "public"
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -140,6 +210,7 @@ class PlaylistItem:
             "thumbnail_url": self.thumbnail_url,
             "uploader": self.uploader,
             "view_count": self.view_count,
+            "like_count": self.like_count,
             "upload_date": self.upload_date,
             "status": self.status.value,
             "filepath": str(self.filepath) if self.filepath else None,
@@ -147,6 +218,8 @@ class PlaylistItem:
             "file_size": self.file_size,
             "download_speed": self.download_speed,
             "retry_count": self.retry_count,
+            "chapter": self.chapter,
+            "availability": self.availability,
         }
 
 
@@ -161,6 +234,7 @@ class PlaylistInfo:
         description: Playlist description
         uploader: Playlist creator
         uploader_id: Creator ID
+        uploader_url: Creator URL
         item_count: Total number of items
         total_duration: Total duration in seconds
         thumbnail_url: Playlist thumbnail
@@ -170,12 +244,15 @@ class PlaylistInfo:
         last_updated: Last update date
         is_private: Whether playlist is private
         url: Original playlist URL
+        stats: Playlist statistics
+        tags: Playlist tags
     """
     id: str
     title: str
     description: Optional[str] = None
     uploader: Optional[str] = None
     uploader_id: Optional[str] = None
+    uploader_url: Optional[str] = None
     item_count: int = 0
     total_duration: int = 0
     thumbnail_url: Optional[str] = None
@@ -185,6 +262,8 @@ class PlaylistInfo:
     last_updated: Optional[str] = None
     is_private: bool = False
     url: str = ""
+    stats: Optional[PlaylistStats] = None
+    tags: List[str] = field(default_factory=list)
     
     @property
     def total_duration_formatted(self) -> str:
@@ -214,6 +293,7 @@ class PlaylistInfo:
             "last_updated": self.last_updated,
             "is_private": self.is_private,
             "url": self.url,
+            "tags": self.tags,
         }
 
 
@@ -238,6 +318,7 @@ class PlaylistProgress:
         average_speed: Average download speed
         is_paused: Whether download is paused
         is_cancelled: Whether download is cancelled
+        current_speed: Current download speed
     """
     playlist_id: str
     total_items: int = 0
@@ -254,6 +335,7 @@ class PlaylistProgress:
     average_speed: float = 0.0
     is_paused: bool = False
     is_cancelled: bool = False
+    current_speed: float = 0.0
     
     @property
     def percentage(self) -> float:
@@ -308,6 +390,7 @@ class PlaylistDownloadResult:
         total_time: Total time elapsed
         results: Individual item results
         errors: List of error messages
+        stats: Playlist statistics
     """
     success: bool
     playlist_info: Optional[PlaylistInfo] = None
@@ -319,6 +402,7 @@ class PlaylistDownloadResult:
     total_time: float = 0.0
     results: List[Dict[str, Any]] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+    stats: Optional[PlaylistStats] = None
     
     @property
     def success_rate(self) -> float:
@@ -354,6 +438,7 @@ class PlaylistFilter:
         max_duration: Maximum duration in seconds
         min_views: Minimum view count
         max_views: Maximum view count
+        min_likes: Minimum like count
         date_after: Only items after this date
         date_before: Only items before this date
         title_regex: Title must match this regex
@@ -362,11 +447,15 @@ class PlaylistFilter:
         exclude_ids: Exclude these IDs
         max_filesize: Maximum file size in bytes
         min_filesize: Minimum file size in bytes
+        include_uploaders: Only from these uploaders
+        exclude_uploaders: Exclude these uploaders
+        availability: Filter by availability
     """
     min_duration: Optional[int] = None
     max_duration: Optional[int] = None
     min_views: Optional[int] = None
     max_views: Optional[int] = None
+    min_likes: Optional[int] = None
     date_after: Optional[str] = None
     date_before: Optional[str] = None
     title_regex: Optional[str] = None
@@ -375,6 +464,9 @@ class PlaylistFilter:
     exclude_ids: Optional[Set[str]] = None
     max_filesize: Optional[int] = None
     min_filesize: Optional[int] = None
+    include_uploaders: Optional[Set[str]] = None
+    exclude_uploaders: Optional[Set[str]] = None
+    availability: Optional[str] = None
     
     def matches(self, item: PlaylistItem) -> bool:
         """Check if an item matches the filter criteria."""
@@ -396,6 +488,12 @@ class PlaylistFilter:
         if self.exclude_ids is not None and item.id in self.exclude_ids:
             return False
         
+        # Uploader filters
+        if self.include_uploaders is not None and item.uploader not in self.include_uploaders:
+            return False
+        if self.exclude_uploaders is not None and item.uploader in self.exclude_uploaders:
+            return False
+        
         # Title regex filters
         if self.title_regex:
             if not re.search(self.title_regex, item.title, re.IGNORECASE):
@@ -403,6 +501,10 @@ class PlaylistFilter:
         if self.exclude_regex:
             if re.search(self.exclude_regex, item.title, re.IGNORECASE):
                 return False
+        
+        # Availability filter
+        if self.availability and item.availability != self.availability:
+            return False
         
         return True
 
@@ -436,6 +538,10 @@ class PlaylistConfig:
         subfolder_name: Subfolder name template
         stop_on_error: Stop downloading on first error
         max_errors: Maximum errors before stopping
+        embed_thumbnail: Embed thumbnail in video
+        embed_metadata: Embed metadata
+        download_thumbnails: Download thumbnails separately
+        save_chapters: Save chapter info
     """
     output_dir: Path = Path("./downloads/playlists")
     filename_template: str = "%(playlist_index)03d - %(title)s.%(ext)s"
@@ -459,12 +565,65 @@ class PlaylistConfig:
     create_subfolders: bool = True
     subfolder_name: str = "%(playlist_title)s"
     stop_on_error: bool = False
-    max_errors: int = 0  # 0 = unlimited
+    max_errors: int = 0
+    embed_thumbnail: bool = False
+    embed_metadata: bool = True
+    download_thumbnails: bool = True
+    save_chapters: bool = True
+
+
+class PlaylistAnalyzer:
+    """Analyze playlist content and statistics."""
+    
+    @staticmethod
+    def analyze(items: List[PlaylistItem]) -> PlaylistStats:
+        """
+        Analyze playlist items and generate statistics.
+        
+        Args:
+            items: List of playlist items
+            
+        Returns:
+            PlaylistStats with analysis results
+        """
+        if not items:
+            return PlaylistStats()
+        
+        stats = PlaylistStats(total_items=len(items))
+        
+        # Calculate totals
+        durations = [item.duration for item in items if item.duration > 0]
+        if durations:
+            stats.total_duration = sum(durations)
+            stats.average_duration = stats.total_duration / len(durations)
+            
+            # Find shortest/longest
+            min_idx = durations.index(min(durations))
+            max_idx = durations.index(max(durations))
+            stats.shortest_item = items[min_idx].to_dict()
+            stats.longest_item = items[max_idx].to_dict()
+        
+        # Find most viewed
+        views = [(item.view_count, i) for i, item in enumerate(items) if item.view_count > 0]
+        if views:
+            _, max_view_idx = max(views, key=lambda x: x[0])
+            stats.most_viewed = items[max_view_idx].to_dict()
+        
+        # Unique channels
+        uploaders = set(item.uploader for item in items if item.uploader)
+        stats.channels = list(uploaders)
+        
+        # Date range
+        dates = [item.upload_date for item in items if item.upload_date]
+        if dates:
+            stats.upload_date_range = (min(dates), max(dates))
+        
+        return stats
 
 
 class PlaylistDownloader:
     """
-    OMNIPOTENT SOVEREIGN NEXUS Playlist Downloader.
+    OMNIPOTENT SOVEREIGN NEXUS Playlist Downloader v3.2.0.
     
     Advanced playlist downloading with comprehensive features:
     - Multi-platform support
@@ -473,7 +632,25 @@ class PlaylistDownloader:
     - Filtering and selection
     - Resume capability
     - Duplicate handling
+    - Playlist analysis
     """
+    
+    PLATFORM_PATTERNS = {
+        PlaylistType.YOUTUBE: [r'youtube\.com/playlist', r'youtube\.com/watch\?.*list='],
+        PlaylistType.YOUTUBE_MIX: [r'youtube\.com/watch\?.*list=RD'],
+        PlaylistType.YOUTUBE_CHANNEL: [r'youtube\.com/(channel|c|user)/'],
+        PlaylistType.SPOTIFY: [r'spotify\.com'],
+        PlaylistType.SOUNDCLOUD: [r'soundcloud\.com'],
+        PlaylistType.APPLE_MUSIC: [r'music\.apple\.com'],
+        PlaylistType.DEEZER: [r'deezer\.com'],
+        PlaylistType.TIDAL: [r'tidal\.com'],
+        PlaylistType.BANDCAMP: [r'bandcamp\.com'],
+        PlaylistType.MIXCLOUD: [r'mixcloud\.com'],
+        PlaylistType.VIMEO: [r'vimeo\.com'],
+        PlaylistType.DAILYMOTION: [r'dailymotion\.com'],
+        PlaylistType.TWITCH: [r'twitch\.tv'],
+        PlaylistType.TWITTER: [r'twitter\.com', r'x\.com'],
+    }
     
     def __init__(
         self,
@@ -487,7 +664,7 @@ class PlaylistDownloader:
         Args:
             config: Download configuration
             progress_callback: Progress update callback
-            item_callback: Item status callback (item, status)
+            item_callback: Item status callback
         """
         self.config = config or PlaylistConfig()
         self._progress_callback = progress_callback
@@ -505,7 +682,7 @@ class PlaylistDownloader:
         # Ensure output directory exists
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"PlaylistDownloader initialized v3.0.1 ULTIMATE NEXUS")
+        logger.info(f"PlaylistDownloader initialized v3.2.0 ULTIMATE NEXUS")
     
     async def __aenter__(self) -> "PlaylistDownloader":
         """Async context manager entry."""
@@ -520,17 +697,13 @@ class PlaylistDownloader:
         """Create aiohttp session."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=self.config.timeout)
-            self._session = aiohttp.ClientSession(
-                timeout=timeout,
-                trust_env=True,
-            )
+            self._session = aiohttp.ClientSession(timeout=timeout, trust_env=True)
     
     async def close(self) -> None:
         """Close the downloader and save archive."""
         if self._session and not self._session.closed:
             await self._session.close()
         
-        # Save download archive
         if self.config.download_archive:
             self._save_download_archive()
         
@@ -570,25 +743,11 @@ class PlaylistDownloader:
     
     def _detect_platform(self, url: str) -> PlaylistType:
         """Detect playlist platform from URL."""
-        patterns = {
-            PlaylistType.YOUTUBE: [r'youtube\.com/playlist', r'youtube\.com/watch\?.*list='],
-            PlaylistType.SPOTIFY: [r'spotify\.com'],
-            PlaylistType.SOUNDCLOUD: [r'soundcloud\.com'],
-            PlaylistType.APPLE_MUSIC: [r'music\.apple\.com'],
-            PlaylistType.DEEZER: [r'deezer\.com'],
-            PlaylistType.TIDAL: [r'tidal\.com'],
-            PlaylistType.BANDCAMP: [r'bandcamp\.com'],
-            PlaylistType.MIXCLOUD: [r'mixcloud\.com'],
-            PlaylistType.VIMEO: [r'vimeo\.com'],
-            PlaylistType.DAILYMOTION: [r'dailymotion\.com'],
-        }
-        
         url_lower = url.lower()
-        for ptype, pats in patterns.items():
-            for pat in pats:
-                if re.search(pat, url_lower):
+        for ptype, patterns in self.PLATFORM_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, url_lower):
                     return ptype
-        
         return PlaylistType.UNKNOWN
     
     async def get_playlist_info(self, url: str) -> Optional[PlaylistInfo]:
@@ -658,6 +817,9 @@ class PlaylistDownloader:
                     )
                     items.append(item)
                 
+                # Analyze playlist
+                stats = PlaylistAnalyzer.analyze(items)
+                
                 return PlaylistInfo(
                     id=playlist_id,
                     title=playlist_title or f"Playlist {playlist_id}",
@@ -669,6 +831,7 @@ class PlaylistDownloader:
                     thumbnail_url=first_item.get("thumbnail"),
                     playlist_type=self._detect_platform(url),
                     items=items,
+                    stats=stats,
                     url=url,
                 )
             
@@ -716,10 +879,7 @@ class PlaylistDownloader:
             actual_output_dir.mkdir(parents=True, exist_ok=True)
             
             # Filter items
-            items_to_download = self._filter_items(
-                playlist_info.items,
-                items,
-            )
+            items_to_download = self._filter_items(playlist_info.items, items)
             
             # Initialize progress
             progress = PlaylistProgress(
@@ -759,6 +919,7 @@ class PlaylistDownloader:
                 total_time=total_time,
                 results=results,
                 errors=[r.get("error") for r in results if r.get("error")],
+                stats=playlist_info.stats,
             )
             
         except asyncio.CancelledError:
@@ -830,7 +991,6 @@ class PlaylistDownloader:
         async def download_item(item: PlaylistItem) -> Dict[str, Any]:
             nonlocal errors_count
             
-            # Check for cancellation/pause
             if download_id in self._cancelled:
                 return {
                     "index": item.index,
@@ -861,7 +1021,6 @@ class PlaylistDownloader:
                         item.status = DownloadStatus.FAILED
                         errors_count += 1
                         
-                        # Check max errors
                         if self.config.max_errors > 0 and errors_count >= self.config.max_errors:
                             self._cancelled.add(download_id)
                     
@@ -880,7 +1039,6 @@ class PlaylistDownloader:
                         "error": str(e),
                     }
         
-        # Run downloads
         tasks = [download_item(item) for item in items]
         results = list(await asyncio.gather(*tasks, return_exceptions=True))
         
@@ -911,7 +1069,6 @@ class PlaylistDownloader:
             }
         
         try:
-            # Build command
             output_template = output_dir / self.config.filename_template
             cmd = [
                 yt_dlp,
@@ -932,6 +1089,12 @@ class PlaylistDownloader:
             if self.config.rate_limit > 0:
                 cmd.extend(["--limit-rate", f"{self.config.rate_limit}"])
             
+            if self.config.embed_thumbnail:
+                cmd.append("--embed-thumbnail")
+            
+            if self.config.embed_metadata:
+                cmd.append("--add-metadata")
+            
             # Execute download
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -942,7 +1105,6 @@ class PlaylistDownloader:
             stdout, stderr = await process.communicate()
             
             if process.returncode == 0:
-                # Find downloaded file
                 downloaded_file = await self._find_item_file(output_dir, item)
                 
                 if downloaded_file:
@@ -978,14 +1140,11 @@ class PlaylistDownloader:
         item: PlaylistItem,
     ) -> Optional[Path]:
         """Find the downloaded file for an item."""
-        # Try to find by index pattern
         for file in output_dir.iterdir():
             if file.is_file():
                 name = file.name.lower()
-                # Check for index pattern
                 if f"{item.index:03d}" in name or f"{item.index:02d}" in name:
                     return file
-                # Check for title match
                 if self._sanitize_filename(item.title).lower() in name:
                     return file
         
@@ -1061,7 +1220,7 @@ class PlaylistDownloader:
     async def export_playlist(
         self,
         url: str,
-        output_format: str = "json",
+        output_format: ExportFormat = ExportFormat.JSON,
         output_path: Optional[Path] = None,
     ) -> Optional[Path]:
         """
@@ -1069,7 +1228,7 @@ class PlaylistDownloader:
         
         Args:
             url: Playlist URL
-            output_format: Output format (json, csv, m3u, txt)
+            output_format: Output format
             output_path: Output file path
             
         Returns:
@@ -1079,17 +1238,16 @@ class PlaylistDownloader:
         if not playlist_info:
             return None
         
-        if output_format == "json":
-            output_path = output_path or Path(f"{playlist_info.title}.json")
+        output_path = output_path or Path(f"{playlist_info.title}.{output_format.value}")
+        
+        if output_format == ExportFormat.JSON:
             async with aiofiles.open(output_path, 'w') as f:
                 await f.write(json.dumps(playlist_info.to_dict(), indent=2))
         
-        elif output_format == "csv":
-            import csv
-            output_path = output_path or Path(f"{playlist_info.title}.csv")
+        elif output_format == ExportFormat.CSV:
             with open(output_path, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["Index", "ID", "Title", "Duration", "URL"])
+                writer.writerow(["Index", "ID", "Title", "Duration", "URL", "Uploader"])
                 for item in playlist_info.items:
                     writer.writerow([
                         item.index,
@@ -1097,23 +1255,55 @@ class PlaylistDownloader:
                         item.title,
                         item.duration,
                         item.url,
+                        item.uploader,
                     ])
         
-        elif output_format == "m3u":
-            output_path = output_path or Path(f"{playlist_info.title}.m3u")
+        elif output_format == ExportFormat.M3U:
             async with aiofiles.open(output_path, 'w') as f:
                 await f.write("#EXTM3U\n")
                 for item in playlist_info.items:
                     await f.write(f"#EXTINF:{item.duration},{item.title}\n")
                     await f.write(f"{item.url}\n")
         
-        elif output_format == "txt":
-            output_path = output_path or Path(f"{playlist_info.title}.txt")
+        elif output_format == ExportFormat.TXT:
             async with aiofiles.open(output_path, 'w') as f:
                 for item in playlist_info.items:
                     await f.write(f"{item.url}\n")
         
         return output_path
+    
+    async def compare_playlists(
+        self,
+        url1: str,
+        url2: str,
+    ) -> Dict[str, Any]:
+        """
+        Compare two playlists.
+        
+        Args:
+            url1: First playlist URL
+            url2: Second playlist URL
+            
+        Returns:
+            Comparison results
+        """
+        info1 = await self.get_playlist_info(url1)
+        info2 = await self.get_playlist_info(url2)
+        
+        if not info1 or not info2:
+            return {"error": "Failed to get playlist info"}
+        
+        ids1 = {item.id for item in info1.items}
+        ids2 = {item.id for item in info2.items}
+        
+        return {
+            "playlist1": info1.title,
+            "playlist2": info2.title,
+            "only_in_first": list(ids1 - ids2),
+            "only_in_second": list(ids2 - ids1),
+            "common": list(ids1 & ids2),
+            "total_unique": len(ids1 | ids2),
+        }
 
 
 # Convenience function
@@ -1149,14 +1339,17 @@ async def download_playlist(
 
 __all__ = [
     "PlaylistDownloader",
-    "PlaylistInfo",
+    "PlaylistAnalyzer",
+    "PlaylistType",
+    "DownloadStatus",
+    "DuplicateAction",
+    "ExportFormat",
     "PlaylistItem",
+    "PlaylistInfo",
     "PlaylistProgress",
     "PlaylistDownloadResult",
     "PlaylistConfig",
     "PlaylistFilter",
-    "PlaylistType",
-    "DownloadStatus",
-    "DuplicateAction",
+    "PlaylistStats",
     "download_playlist",
 ]

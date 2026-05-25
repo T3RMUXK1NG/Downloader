@@ -94,12 +94,12 @@ ColorCode = Tuple[int, int, int]  # RGB
 VersionTuple = Tuple[int, int, int]
 
 # Constants
-__version__: Final[str] = "3.0.1"
+__version__: Final[str] = "3.2.0"
 __author__: Final[str] = "RAJSARASWATI JATAV (RS)"
 __codename__: Final[str] = "ULTIMATE NEXUS"
 __edition__: Final[str] = "OMNIPOTENT SOVEREIGN"
 
-VERSION: Final[VersionTuple] = (3, 0, 1)
+VERSION: Final[VersionTuple] = (3, 2, 0)
 DEFAULT_CONFIG_DIR: Final[PathLike] = "~/.config/rs_toolkit"
 DEFAULT_CACHE_DIR: Final[PathLike] = "~/.cache/rs_toolkit"
 DEFAULT_DATA_DIR: Final[PathLike] = "~/.local/share/rs_toolkit"

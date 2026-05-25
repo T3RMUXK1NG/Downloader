@@ -4,7 +4,7 @@
 OMNIPOTENT SOVEREIGN NEXUS - Advanced Logging Module
 =====================================================
 
-Version: 3.0.1 ULTIMATE NEXUS
+Version: 3.2.0 ULTIMATE NEXUS
 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
 
 This module provides comprehensive logging capabilities for the Downloader
@@ -1428,6 +1428,666 @@ class Logger:
         for handler in self._handlers.values():
             if hasattr(handler, "flush"):
                 handler.flush()
+    
+    # Remote logging methods (NEW v3.2.0)
+    def add_syslog_handler(
+        self,
+        address: Union[str, Tuple[str, int]] = "/dev/log",
+        facility: int = 1,  # LOG_USER
+        socktype: int = 2,  # SOCK_DGRAM
+        level: Optional[Union[int, LogLevel, str]] = None
+    ) -> "Logger":
+        """
+        Add syslog handler for remote logging.
+        
+        Args:
+            address: Syslog server address (path or host:port).
+            facility: Syslog facility code.
+            socktype: Socket type (SOCK_STREAM=1, SOCK_DGRAM=2).
+            level: Handler log level.
+        
+        Returns:
+            Logger: Self for chaining.
+        
+        Example:
+            >>> logger.add_syslog_handler(("logs.example.com", 514))
+        """
+        import logging.handlers
+        
+        if isinstance(address, str) and ":" in address:
+            host, port = address.split(":", 1)
+            address = (host, int(port))
+        
+        handler = logging.handlers.SysLogHandler(
+            address=address,
+            facility=facility,
+            socktype=socktype,
+        )
+        
+        handler.setFormatter(Formatter(
+            fmt="%(name)s: %(levelname)s %(message)s"
+        ))
+        
+        if level is not None:
+            if isinstance(level, str):
+                level = LogLevel[level.upper()]
+            if isinstance(level, LogLevel):
+                level = getattr(logging, level.value)
+            handler.setLevel(level)
+        
+        self._add_handler("syslog", handler)
+        return self
+    
+    def add_network_handler(
+        self,
+        host: str,
+        port: int,
+        protocol: str = "udp",
+        level: Optional[Union[int, LogLevel, str]] = None,
+        timeout: float = 5.0,
+        reconnect_interval: float = 30.0
+    ) -> "Logger":
+        """
+        Add network handler for remote log aggregation.
+        
+        Supports TCP and UDP protocols for sending logs to
+        remote log aggregation services like Logstash, Fluentd,
+        or custom log servers.
+        
+        Args:
+            host: Remote server hostname or IP.
+            port: Remote server port.
+            protocol: Protocol to use ('tcp' or 'udp').
+            level: Handler log level.
+            timeout: Connection timeout in seconds.
+            reconnect_interval: Interval between reconnection attempts.
+        
+        Returns:
+            Logger: Self for chaining.
+        
+        Example:
+            >>> logger.add_network_handler("logs.example.com", 5000, protocol="tcp")
+        """
+        handler = NetworkLogHandler(
+            host=host,
+            port=port,
+            protocol=protocol,
+            timeout=timeout,
+            reconnect_interval=reconnect_interval
+        )
+        
+        handler.setFormatter(JSONFormatter())
+        
+        if level is not None:
+            if isinstance(level, str):
+                level = LogLevel[level.upper()]
+            if isinstance(level, LogLevel):
+                level = getattr(logging, level.value)
+            handler.setLevel(level)
+        
+        self._add_handler(f"network:{host}:{port}", handler)
+        return self
+    
+    def add_webhook_handler(
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        level: Optional[Union[int, LogLevel, str]] = None,
+        timeout: float = 10.0,
+        batch_size: int = 10,
+        batch_interval: float = 5.0
+    ) -> "Logger":
+        """
+        Add webhook handler for HTTP-based log forwarding.
+        
+        Sends logs to a webhook endpoint via HTTP POST requests.
+        Useful for integration with services like Slack, Discord,
+        or custom webhook receivers.
+        
+        Args:
+            url: Webhook URL.
+            headers: HTTP headers to include.
+            level: Handler log level.
+            timeout: Request timeout in seconds.
+            batch_size: Number of logs to batch before sending.
+            batch_interval: Maximum time to wait before sending batch.
+        
+        Returns:
+            Logger: Self for chaining.
+        
+        Example:
+            >>> logger.add_webhook_handler(
+            ...     "https://hooks.slack.com/services/XXX",
+            ...     headers={"Content-Type": "application/json"}
+            ... )
+        """
+        handler = WebhookLogHandler(
+            url=url,
+            headers=headers or {},
+            timeout=timeout,
+            batch_size=batch_size,
+            batch_interval=batch_interval
+        )
+        
+        handler.setFormatter(JSONFormatter())
+        
+        if level is not None:
+            if isinstance(level, str):
+                level = LogLevel[level.upper()]
+            if isinstance(level, LogLevel):
+                level = getattr(logging, level.value)
+            handler.setLevel(level)
+        
+        self._add_handler(f"webhook:{url[:50]}", handler)
+        return self
+    
+    def add_elasticsearch_handler(
+        self,
+        hosts: List[str],
+        index: str = "logs",
+        level: Optional[Union[int, LogLevel, str]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        batch_size: int = 100,
+        flush_interval: float = 5.0
+    ) -> "Logger":
+        """
+        Add Elasticsearch handler for log indexing.
+        
+        Sends logs directly to Elasticsearch for indexing and
+        search capabilities.
+        
+        Args:
+            hosts: List of Elasticsearch hosts.
+            index: Index name prefix.
+            level: Handler log level.
+            auth: Optional (username, password) tuple.
+            batch_size: Number of logs to batch.
+            flush_interval: Interval between flushes.
+        
+        Returns:
+            Logger: Self for chaining.
+        
+        Example:
+            >>> logger.add_elasticsearch_handler(
+            ...     ["http://localhost:9200"],
+            ...     index="downloader-logs"
+            ... )
+        """
+        handler = ElasticsearchLogHandler(
+            hosts=hosts,
+            index=index,
+            auth=auth,
+            batch_size=batch_size,
+            flush_interval=flush_interval
+        )
+        
+        handler.setFormatter(JSONFormatter())
+        
+        if level is not None:
+            if isinstance(level, str):
+                level = LogLevel[level.upper()]
+            if isinstance(level, LogLevel):
+                level = getattr(logging, level.value)
+            handler.setLevel(level)
+        
+        self._add_handler(f"elasticsearch:{index}", handler)
+        return self
+
+
+# =============================================================================
+# REMOTE LOGGING HANDLERS (NEW v3.2.0)
+# =============================================================================
+
+class NetworkLogHandler(Handler):
+    """
+    Network log handler for UDP/TCP log forwarding.
+    
+    Sends log records to a remote server via network sockets.
+    """
+    
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        protocol: str = "udp",
+        timeout: float = 5.0,
+        reconnect_interval: float = 30.0
+    ) -> None:
+        """
+        Initialize network log handler.
+        
+        Args:
+            host: Remote server hostname.
+            port: Remote server port.
+            protocol: Protocol ('tcp' or 'udp').
+            timeout: Connection timeout.
+            reconnect_interval: Time between reconnection attempts.
+        """
+        super().__init__()
+        self.host = host
+        self.port = port
+        self.protocol = protocol.lower()
+        self.timeout = timeout
+        self.reconnect_interval = reconnect_interval
+        
+        self._socket: Optional[socket.socket] = None
+        self._last_connect_attempt: float = 0.0
+        self._connected = False
+        self._lock = threading.Lock()
+        
+        self._connect()
+    
+    def _connect(self) -> bool:
+        """Establish connection to remote server."""
+        now = time.time()
+        
+        # Rate limit reconnection attempts
+        if now - self._last_connect_attempt < self.reconnect_interval:
+            return False
+        
+        self._last_connect_attempt = now
+        
+        try:
+            if self._socket:
+                self._socket.close()
+            
+            sock_type = socket.SOCK_STREAM if self.protocol == "tcp" else socket.SOCK_DGRAM
+            self._socket = socket.socket(socket.AF_INET, sock_type)
+            self._socket.settimeout(self.timeout)
+            
+            if self.protocol == "tcp":
+                self._socket.connect((self.host, self.port))
+            
+            self._connected = True
+            return True
+            
+        except OSError:
+            self._connected = False
+            return False
+    
+    def emit(self, record: LogRecord) -> None:
+        """Send log record to remote server."""
+        try:
+            msg = self.format(record).encode("utf-8") + b"\n"
+            
+            with self._lock:
+                if not self._connected:
+                    if not self._connect():
+                        return
+                
+                try:
+                    if self.protocol == "tcp":
+                        self._socket.sendall(msg)
+                    else:
+                        self._socket.sendto(msg, (self.host, self.port))
+                        
+                except OSError:
+                    self._connected = False
+                    # Try to reconnect for next message
+                    self._connect()
+                    
+        except Exception:
+            self.handleError(record)
+    
+    def close(self) -> None:
+        """Close the handler and socket."""
+        with self._lock:
+            if self._socket:
+                self._socket.close()
+                self._socket = None
+        super().close()
+
+
+class WebhookLogHandler(Handler):
+    """
+    HTTP webhook log handler for cloud log services.
+    
+    Batches log records and sends them via HTTP POST requests.
+    """
+    
+    def __init__(
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: float = 10.0,
+        batch_size: int = 10,
+        batch_interval: float = 5.0
+    ) -> None:
+        """
+        Initialize webhook log handler.
+        
+        Args:
+            url: Webhook URL.
+            headers: HTTP headers.
+            timeout: Request timeout.
+            batch_size: Number of logs per batch.
+            batch_interval: Maximum time between batches.
+        """
+        super().__init__()
+        self.url = url
+        self.headers = headers or {}
+        self.timeout = timeout
+        self.batch_size = batch_size
+        self.batch_interval = batch_interval
+        
+        self._buffer: List[Dict[str, Any]] = []
+        self._last_flush = time.time()
+        self._lock = threading.Lock()
+        self._flush_thread: Optional[threading.Thread] = None
+        self._running = True
+        
+        # Start background flush thread
+        self._start_flush_thread()
+    
+    def _start_flush_thread(self) -> None:
+        """Start background flush thread."""
+        def flush_loop():
+            while self._running:
+                time.sleep(self.batch_interval)
+                self._flush()
+        
+        self._flush_thread = threading.Thread(target=flush_loop, daemon=True)
+        self._flush_thread.start()
+    
+    def emit(self, record: LogRecord) -> None:
+        """Buffer log record."""
+        try:
+            log_entry = json.loads(self.format(record))
+            
+            with self._lock:
+                self._buffer.append(log_entry)
+                
+                if len(self._buffer) >= self.batch_size:
+                    self._flush()
+                    
+        except Exception:
+            self.handleError(record)
+    
+    def _flush(self) -> None:
+        """Send buffered logs to webhook."""
+        with self._lock:
+            if not self._buffer:
+                return
+            
+            logs = self._buffer.copy()
+            self._buffer.clear()
+        
+        self._send_webhook(logs)
+    
+    def _send_webhook(self, logs: List[Dict[str, Any]]) -> None:
+        """Send logs to webhook URL."""
+        import urllib.request
+        
+        try:
+            payload = json.dumps({"logs": logs}).encode("utf-8")
+            
+            request = urllib.request.Request(
+                self.url,
+                data=payload,
+                headers={
+                    **self.headers,
+                    "Content-Type": "application/json",
+                    "User-Agent": "Downloader-Logger/3.2.0"
+                },
+                method="POST"
+            )
+            
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                if response.status >= 400:
+                    warnings.warn(f"Webhook returned status {response.status}")
+                    
+        except Exception as e:
+            warnings.warn(f"Failed to send webhook logs: {e}")
+    
+    def close(self) -> None:
+        """Close handler and flush remaining logs."""
+        self._running = False
+        self._flush()
+        super().close()
+
+
+class ElasticsearchLogHandler(Handler):
+    """
+    Elasticsearch log handler for log indexing.
+    
+    Sends logs directly to Elasticsearch for indexing.
+    """
+    
+    def __init__(
+        self,
+        hosts: List[str],
+        index: str = "logs",
+        auth: Optional[Tuple[str, str]] = None,
+        batch_size: int = 100,
+        flush_interval: float = 5.0
+    ) -> None:
+        """
+        Initialize Elasticsearch log handler.
+        
+        Args:
+            hosts: List of Elasticsearch hosts.
+            index: Index name prefix.
+            auth: Optional (username, password) tuple.
+            batch_size: Number of logs per batch.
+            flush_interval: Time between flushes.
+        """
+        super().__init__()
+        self.hosts = hosts
+        self.index = index
+        self.auth = auth
+        self.batch_size = batch_size
+        self.flush_interval = flush_interval
+        
+        self._buffer: List[Dict[str, Any]] = []
+        self._lock = threading.Lock()
+        self._running = True
+        
+        # Start background flush thread
+        self._start_flush_thread()
+    
+    def _start_flush_thread(self) -> None:
+        """Start background flush thread."""
+        def flush_loop():
+            while self._running:
+                time.sleep(self.flush_interval)
+                self._flush()
+        
+        thread = threading.Thread(target=flush_loop, daemon=True)
+        thread.start()
+    
+    def emit(self, record: LogRecord) -> None:
+        """Buffer log record."""
+        try:
+            log_entry = json.loads(self.format(record))
+            log_entry["@timestamp"] = datetime.now(tz=timezone.utc).isoformat()
+            
+            with self._lock:
+                self._buffer.append(log_entry)
+                
+                if len(self._buffer) >= self.batch_size:
+                    self._flush()
+                    
+        except Exception:
+            self.handleError(record)
+    
+    def _flush(self) -> None:
+        """Send buffered logs to Elasticsearch."""
+        import urllib.request
+        import base64
+        
+        with self._lock:
+            if not self._buffer:
+                return
+            
+            logs = self._buffer.copy()
+            self._buffer.clear()
+        
+        # Build bulk request body
+        body_parts = []
+        for log in logs:
+            # Index action
+            index_name = f"{self.index}-{datetime.now().strftime('%Y.%m.%d')}"
+            body_parts.append(json.dumps({"index": {"_index": index_name}}))
+            body_parts.append(json.dumps(log))
+        
+        body = "\n".join(body_parts) + "\n"
+        
+        # Send to Elasticsearch
+        for host in self.hosts:
+            try:
+                url = f"{host.rstrip('/')}/_bulk"
+                headers = {
+                    "Content-Type": "application/x-ndjson",
+                }
+                
+                if self.auth:
+                    auth_str = f"{self.auth[0]}:{self.auth[1]}"
+                    encoded = base64.b64encode(auth_str.encode()).decode()
+                    headers["Authorization"] = f"Basic {encoded}"
+                
+                request = urllib.request.Request(
+                    url,
+                    data=body.encode("utf-8"),
+                    headers=headers,
+                    method="POST"
+                )
+                
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    if response.status >= 400:
+                        warnings.warn(f"Elasticsearch returned status {response.status}")
+                    break  # Success, don't try other hosts
+                    
+            except Exception as e:
+                warnings.warn(f"Failed to send logs to Elasticsearch: {e}")
+    
+    def close(self) -> None:
+        """Close handler and flush remaining logs."""
+        self._running = False
+        self._flush()
+        super().close()
+
+
+# =============================================================================
+# LOG ROTATION ENHANCEMENTS (v3.2.0)
+# =============================================================================
+
+class CompositeRotatingFileHandler(Handler):
+    """
+    Advanced rotating file handler with multiple rotation policies.
+    
+    Supports simultaneous size-based and time-based rotation
+    with compression of rotated files.
+    """
+    
+    def __init__(
+        self,
+        filename: Union[str, Path],
+        max_bytes: int = 10 * 1024 * 1024,  # 10MB
+        backup_count: int = 5,
+        rotate_on: str = "both",  # 'size', 'time', 'both'
+        compress_backups: bool = True,
+        encoding: str = "utf-8"
+    ) -> None:
+        """
+        Initialize composite rotating file handler.
+        
+        Args:
+            filename: Log file path.
+            max_bytes: Maximum file size before rotation.
+            backup_count: Number of backup files to keep.
+            rotate_on: Rotation policy ('size', 'time', 'both').
+            compress_backups: Whether to compress rotated files.
+            encoding: File encoding.
+        """
+        super().__init__()
+        self.filename = Path(filename)
+        self.max_bytes = max_bytes
+        self.backup_count = backup_count
+        self.rotate_on = rotate_on
+        self.compress_backups = compress_backups
+        self.encoding = encoding
+        
+        self._file: Optional[IO[str]] = None
+        self._current_size = 0
+        self._lock = threading.Lock()
+        
+        # Ensure directory exists
+        self.filename.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Open file
+        self._open_file()
+    
+    def _open_file(self) -> None:
+        """Open log file for writing."""
+        mode = "a" if self.filename.exists() else "w"
+        self._file = open(self.filename, mode, encoding=self.encoding)
+        
+        # Get current size
+        self._current_size = self.filename.stat().st_size if self.filename.exists() else 0
+    
+    def emit(self, record: LogRecord) -> None:
+        """Write log record to file."""
+        try:
+            msg = self.format(record) + "\n"
+            msg_bytes = msg.encode(self.encoding)
+            
+            with self._lock:
+                # Check if rotation needed
+                if self.rotate_on in ("size", "both"):
+                    if self._current_size + len(msg_bytes) > self.max_bytes:
+                        self._rotate()
+                
+                # Write message
+                self._file.write(msg)
+                self._file.flush()
+                self._current_size += len(msg_bytes)
+                
+        except Exception:
+            self.handleError(record)
+    
+    def _rotate(self) -> None:
+        """Rotate log files."""
+        # Close current file
+        if self._file:
+            self._file.close()
+        
+        # Rotate existing backups
+        for i in range(self.backup_count - 1, 0, -1):
+            src = self.filename.with_suffix(f".{i}.log")
+            if self.compress_backups:
+                src = self.filename.with_suffix(f".{i}.log.gz")
+            
+            if src.exists():
+                dst = self.filename.with_suffix(f".{i+1}.log")
+                if self.compress_backups:
+                    dst = self.filename.with_suffix(f".{i+1}.log.gz")
+                src.rename(dst)
+        
+        # Rotate current file
+        if self.filename.exists():
+            if self.compress_backups:
+                import gzip
+                backup = self.filename.with_suffix(".1.log.gz")
+                with gzip.open(backup, "wb") as gz:
+                    gz.write(self.filename.read_bytes())
+                self.filename.unlink()
+            else:
+                backup = self.filename.with_suffix(".1.log")
+                self.filename.rename(backup)
+        
+        # Open new file
+        self._open_file()
+    
+    def close(self) -> None:
+        """Close the handler."""
+        with self._lock:
+            if self._file:
+                self._file.close()
+        super().close()
+
+
+# Type variable for generic return type
+T = TypeVar('T')
 
 
 # =============================================================================
@@ -1547,6 +2207,11 @@ __all__ = [
     "MemoryHandler",
     "SizeRotatingFileHandler",
     "TimeRotatingFileHandler",
+    # Remote logging handlers (NEW v3.2.0)
+    "NetworkLogHandler",
+    "WebhookLogHandler",
+    "ElasticsearchLogHandler",
+    "CompositeRotatingFileHandler",
     # Functions
     "get_logger",
     "configure_logging",

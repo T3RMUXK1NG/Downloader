@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   SERVICES INDEX v3.0.1 ULTIMATE NEXUS                        ║
+ * ║                   SERVICES INDEX v3.2.0 ULTIMATE NEXUS                        ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Central export for all services                               ║
  * ║  Features: Single import point, Type-safe, Singleton pattern                ║
+ * ║            Enhanced with v3.2.0 features: Events, Priority Queues, Caching  ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/index
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 
@@ -46,6 +47,17 @@ export {
   type DownloadResult,
   type DownloadQueueItem,
   type DownloadCache,
+  // v3.2.0 Enhanced exports
+  DownloadPriority,
+  DownloadErrorType,
+  DownloadError,
+  DownloadEventType,
+  type URLValidationResult,
+  type SpeedStats,
+  type DownloadEvent,
+  type DownloadEventListener,
+  type SpeedLimiterConfig,
+  type QueueStats,
 } from './downloadService';
 
 // Convert Service
@@ -62,6 +74,19 @@ export {
   type ConvertQueueItem,
   type ConversionPreset,
   ConvertStatus,
+  // v3.2.0 Enhanced exports
+  type HardwareAcceleration,
+  ConvertErrorType,
+  ConvertError,
+  type VideoFilter,
+  type AudioFilter,
+  type EnhancedConvertOptions,
+  type Chapter,
+  type Attachment,
+  type ConvertQueueStats,
+  ConvertEventType,
+  type ConvertEvent,
+  type ConvertEventListener,
 } from './convertService';
 
 // Subtitle Service
@@ -259,7 +284,11 @@ export {
 export function initializeServices(): void {
   // All services are singletons and auto-initialize
   // This function can be used for any startup configuration
-  console.log('RS TOOLKIT Services Initialized - Ultimate Nexus v3.0.1');
+  console.log('RS TOOLKIT Services Initialized - Ultimate Nexus v3.2.0');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('  Enhanced Features: Events, Priority Queues, Speed Limiting');
+  console.log('  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
 /**
@@ -299,5 +328,28 @@ export async function healthCheck(): Promise<Record<string, boolean>> {
     analytics: true,
     storage: true,
     notification: true,
+  };
+}
+
+/**
+ * Get service version info
+ */
+export function getVersionInfo(): { version: string; services: Record<string, string> } {
+  return {
+    version: '3.2.0',
+    services: {
+      download: '3.2.0',
+      convert: '3.2.0',
+      subtitle: '3.2.0',
+      thumbnail: '3.2.0',
+      metadata: '3.2.0',
+      scheduler: '3.2.0',
+      cloud: '3.2.0',
+      ai: '3.2.0',
+      storage: '3.2.0',
+      analytics: '3.2.0',
+      proxy: '3.2.0',
+      notification: '3.2.0',
+    },
   };
 }

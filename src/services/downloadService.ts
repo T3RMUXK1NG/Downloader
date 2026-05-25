@@ -1,16 +1,17 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   DOWNLOAD SERVICE v3.0.1 ULTIMATE NEXUS                      ║
+ * ║                   DOWNLOAD SERVICE v3.2.0 ULTIMATE NEXUS                      ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite download operations service                              ║
  * ║  Features: Multi-source, Cancellation, Retry, Cache, Progress tracking       ║
+ * ║            Priority Queue, Speed Limiting, URL Validation, Event Emitter     ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/downloadService
- * @version 3.0.1
- * @author RAJSARASWATI JATEV (RS)
+ * @version 3.2.0
+ * @author RAJSARASWATI JATAV (RS)
  */
 
 import {
@@ -89,6 +90,124 @@ export interface DownloadCache {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ENHANCED TYPES v3.2.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Download priority levels
+ */
+export enum DownloadPriority {
+  LOW = 0,
+  NORMAL = 1,
+  HIGH = 2,
+  URGENT = 3,
+}
+
+/**
+ * Download error types for better error handling
+ */
+export enum DownloadErrorType {
+  NETWORK_ERROR = 'network_error',
+  TIMEOUT = 'timeout',
+  INVALID_URL = 'invalid_url',
+  FILE_NOT_FOUND = 'file_not_found',
+  PERMISSION_DENIED = 'permission_denied',
+  DISK_FULL = 'disk_full',
+  CANCELLED = 'cancelled',
+  UNKNOWN = 'unknown',
+}
+
+/**
+ * Custom download error class
+ */
+export class DownloadError extends Error {
+  constructor(
+    public readonly type: DownloadErrorType,
+    message: string,
+    public readonly downloadId?: string,
+    public readonly retryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'DownloadError';
+  }
+}
+
+/**
+ * URL validation result
+ */
+export interface URLValidationResult {
+  valid: boolean;
+  protocol?: string;
+  hostname?: string;
+  port?: number;
+  path?: string;
+  error?: string;
+}
+
+/**
+ * Download speed statistics
+ */
+export interface SpeedStats {
+  currentSpeed: number;
+  averageSpeed: number;
+  peakSpeed: number;
+  minSpeed: number;
+  samples: number;
+}
+
+/**
+ * Download event types for event emitter
+ */
+export enum DownloadEventType {
+  STARTED = 'started',
+  PROGRESS = 'progress',
+  PAUSED = 'paused',
+  RESUMED = 'resumed',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  CANCELLED = 'cancelled',
+  RETRYING = 'retrying',
+  SPEED_CHANGE = 'speed_change',
+}
+
+/**
+ * Download event payload
+ */
+export interface DownloadEvent {
+  type: DownloadEventType;
+  downloadId: string;
+  timestamp: Date;
+  data?: unknown;
+}
+
+/**
+ * Event listener callback type
+ */
+export type DownloadEventListener = (event: DownloadEvent) => void;
+
+/**
+ * Speed limiter configuration
+ */
+export interface SpeedLimiterConfig {
+  enabled: boolean;
+  maxBytesPerSecond: number;
+  burstSize?: number;
+}
+
+/**
+ * Queue statistics
+ */
+export interface QueueStats {
+  total: number;
+  pending: number;
+  downloading: number;
+  paused: number;
+  completed: number;
+  failed: number;
+  byPriority: Record<DownloadPriority, number>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DOWNLOAD SERVICE CLASS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -96,6 +215,7 @@ export interface DownloadCache {
  * Elite Download Service
  * @class DownloadService
  * @description Handles all download operations with retry, cancellation, and caching
+ * @version 3.2.0 - Enhanced with priority queue, speed limiting, events
  */
 export class DownloadService {
   private static instance: DownloadService;
@@ -106,9 +226,89 @@ export class DownloadService {
   private defaultRetries: number = 3;
   private defaultTimeout: number = 30000;
   private cacheTTL: number = 86400000; // 24 hours
+  
+  // v3.2.0 Enhanced features
+  private priorityQueue: Map<DownloadPriority, string[]> = new Map();
+  private eventListeners: Map<DownloadEventType, Set<DownloadEventListener>> = new Map();
+  private speedLimiter: SpeedLimiterConfig = { enabled: false, maxBytesPerSecond: 0 };
+  private speedHistory: Map<string, number[]> = new Map();
+  private globalSpeedLimit: number = 0;
+  private currentGlobalSpeed: number = 0;
+  private downloadSpeeds: Map<string, number> = new Map();
 
   private constructor() {
     this.startCacheCleanup();
+    this.initializePriorityQueue();
+    this.initializeEventListeners();
+  }
+
+  /**
+   * Initialize priority queue
+   */
+  private initializePriorityQueue(): void {
+    Object.values(DownloadPriority).forEach((priority) => {
+      if (typeof priority === 'number') {
+        this.priorityQueue.set(priority as DownloadPriority, []);
+      }
+    });
+  }
+
+  /**
+   * Initialize event listener maps
+   */
+  private initializeEventListeners(): void {
+    Object.values(DownloadEventType).forEach((type) => {
+      this.eventListeners.set(type, new Set());
+    });
+  }
+
+  /**
+   * Subscribe to download events
+   * @param type Event type
+   * @param listener Callback function
+   * @returns Unsubscribe function
+   */
+  on(type: DownloadEventType, listener: DownloadEventListener): () => void {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.add(listener);
+    }
+    return () => {
+      listeners?.delete(listener);
+    };
+  }
+
+  /**
+   * Subscribe to all download events
+   */
+  onAll(listener: DownloadEventListener): () => void {
+    const unsubscribers: Array<() => void> = [];
+    Object.values(DownloadEventType).forEach((type) => {
+      unsubscribers.push(this.on(type, listener));
+    });
+    return () => unsubscribers.forEach((unsub) => unsub());
+  }
+
+  /**
+   * Emit download event
+   */
+  private emit(type: DownloadEventType, downloadId: string, data?: unknown): void {
+    const event: DownloadEvent = {
+      type,
+      downloadId,
+      timestamp: new Date(),
+      data,
+    };
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.forEach((listener) => {
+        try {
+          listener(event);
+        } catch (error) {
+          logger.error('Event listener error', { error, type, downloadId });
+        }
+      });
+    }
   }
 
   static getInstance(): DownloadService {
@@ -553,6 +753,337 @@ export class DownloadService {
       failedDownloads: downloads.filter((d) => d.status === DownloadStatus.FAILED).length,
       cacheSize: this.cache.size,
     };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // v3.2.0 ENHANCED METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Validate URL before download
+   * @param url URL to validate
+   * @returns Validation result
+   */
+  validateURL(url: string): URLValidationResult {
+    try {
+      const parsed = new URL(url);
+      
+      // Check protocol
+      const validProtocols = ['http:', 'https:', 'ftp:'];
+      if (!validProtocols.includes(parsed.protocol)) {
+        return {
+          valid: false,
+          error: `Invalid protocol: ${parsed.protocol}. Supported: ${validProtocols.join(', ')}`,
+        };
+      }
+
+      return {
+        valid: true,
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port ? parseInt(parsed.port) : parsed.protocol === 'https:' ? 443 : 80,
+        path: parsed.pathname + parsed.search,
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Invalid URL format',
+      };
+    }
+  }
+
+  /**
+   * Start download with priority
+   * @param options Download options
+   * @param priority Download priority
+   * @returns Download response
+   */
+  async startDownloadWithPriority(
+    options: DownloadOptions, 
+    priority: DownloadPriority = DownloadPriority.NORMAL
+  ): Promise<DownloadResponse> {
+    // Validate URL first
+    const validation = this.validateURL(options.url);
+    if (!validation.valid) {
+      throw new DownloadError(
+        DownloadErrorType.INVALID_URL,
+        validation.error || 'Invalid URL',
+        undefined,
+        false
+      );
+    }
+
+    const response = await this.startDownload(options);
+    
+    // Add to priority queue
+    const queue = this.priorityQueue.get(priority) || [];
+    queue.push(response.downloadId);
+    this.priorityQueue.set(priority, queue);
+    
+    return response;
+  }
+
+  /**
+   * Set global speed limit for all downloads
+   * @param bytesPerSecond Maximum bytes per second (0 = unlimited)
+   */
+  setGlobalSpeedLimit(bytesPerSecond: number): void {
+    this.globalSpeedLimit = bytesPerSecond;
+    this.speedLimiter = {
+      enabled: bytesPerSecond > 0,
+      maxBytesPerSecond: bytesPerSecond,
+    };
+    logger.info(`Global speed limit set to ${formatBytes(bytesPerSecond)}/s`);
+  }
+
+  /**
+   * Get current speed statistics for a download
+   * @param downloadId Download ID
+   * @returns Speed statistics
+   */
+  getSpeedStats(downloadId: string): SpeedStats | null {
+    const speeds = this.speedHistory.get(downloadId);
+    if (!speeds || speeds.length === 0) return null;
+
+    return {
+      currentSpeed: speeds[speeds.length - 1],
+      averageSpeed: speeds.reduce((a, b) => a + b, 0) / speeds.length,
+      peakSpeed: Math.max(...speeds),
+      minSpeed: Math.min(...speeds),
+      samples: speeds.length,
+    };
+  }
+
+  /**
+   * Get queue statistics
+   * @returns Queue statistics by priority
+   */
+  getQueueStats(): QueueStats {
+    const byPriority: Record<DownloadPriority, number> = {
+      [DownloadPriority.LOW]: 0,
+      [DownloadPriority.NORMAL]: 0,
+      [DownloadPriority.HIGH]: 0,
+      [DownloadPriority.URGENT]: 0,
+    };
+
+    let pending = 0;
+    let downloading = 0;
+    let paused = 0;
+    let completed = 0;
+    let failed = 0;
+
+    for (const item of this.downloads.values()) {
+      switch (item.status) {
+        case DownloadStatus.PENDING:
+          pending++;
+          break;
+        case DownloadStatus.DOWNLOADING:
+          downloading++;
+          break;
+        case DownloadStatus.PAUSED:
+          paused++;
+          break;
+        case DownloadStatus.COMPLETED:
+          completed++;
+          break;
+        case DownloadStatus.FAILED:
+          failed++;
+          break;
+      }
+    }
+
+    // Count by priority
+    for (const [priority, ids] of this.priorityQueue.entries()) {
+      byPriority[priority] = ids.length;
+    }
+
+    return {
+      total: this.downloads.size,
+      pending,
+      downloading,
+      paused,
+      completed,
+      failed,
+      byPriority,
+    };
+  }
+
+  /**
+   * Clear completed downloads from queue
+   * @returns Number of cleared items
+   */
+  clearCompleted(): number {
+    let cleared = 0;
+    for (const [id, item] of this.downloads.entries()) {
+      if (
+        item.status === DownloadStatus.COMPLETED || 
+        item.status === DownloadStatus.FAILED ||
+        item.status === DownloadStatus.CANCELLED
+      ) {
+        this.downloads.delete(id);
+        this.speedHistory.delete(id);
+        this.downloadSpeeds.delete(id);
+        cleared++;
+      }
+    }
+    return cleared;
+  }
+
+  /**
+   * Set maximum concurrent downloads
+   * @param max Maximum concurrent downloads
+   */
+  setMaxConcurrent(max: number): void {
+    this.maxConcurrent = Math.max(1, Math.min(20, max));
+    logger.info(`Max concurrent downloads set to ${this.maxConcurrent}`);
+  }
+
+  /**
+   * Download multiple URLs with batch options
+   * @param urls URLs to download
+   * @param options Download options
+   * @param concurrency Maximum concurrent downloads
+   * @returns Promise resolving to all download responses
+   */
+  async batchDownloadWithConcurrency(
+    urls: string[],
+    options?: Partial<DownloadOptions>,
+    concurrency: number = 3
+  ): Promise<DownloadResponse[]> {
+    const results: DownloadResponse[] = [];
+    const batches: string[][] = [];
+    
+    // Split URLs into batches
+    for (let i = 0; i < urls.length; i += concurrency) {
+      batches.push(urls.slice(i, i + concurrency));
+    }
+
+    for (const batch of batches) {
+      const batchResults = await Promise.all(
+        batch.map((url) => this.startDownload({ url, ...options }))
+      );
+      results.push(...batchResults);
+    }
+
+    return results;
+  }
+
+  /**
+   * Get download by URL
+   * @param url Download URL
+   * @returns Download queue item or null
+   */
+  getDownloadByUrl(url: string): DownloadQueueItem | null {
+    for (const item of this.downloads.values()) {
+      if (item.options.url === url) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if URL is already being downloaded
+   * @param url URL to check
+   * @returns True if URL is in queue or downloading
+   */
+  isUrlDownloading(url: string): boolean {
+    const item = this.getDownloadByUrl(url);
+    if (!item) return false;
+    return [
+      DownloadStatus.PENDING,
+      DownloadStatus.DOWNLOADING,
+      DownloadStatus.RETRYING,
+    ].includes(item.status);
+  }
+
+  /**
+   * Get total download speed across all active downloads
+   * @returns Total speed in bytes per second
+   */
+  getTotalSpeed(): number {
+    let total = 0;
+    for (const speed of this.downloadSpeeds.values()) {
+      total += speed;
+    }
+    return total;
+  }
+
+  /**
+   * Pause all active downloads
+   * @returns Number of paused downloads
+   */
+  pauseAll(): number {
+    let count = 0;
+    for (const [id, item] of this.downloads.entries()) {
+      if (item.status === DownloadStatus.DOWNLOADING) {
+        this.pauseDownload(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Resume all paused downloads
+   * @returns Number of resumed downloads
+   */
+  resumeAll(): number {
+    let count = 0;
+    for (const [id, item] of this.downloads.entries()) {
+      if (item.status === DownloadStatus.PAUSED) {
+        this.resumeDownload(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Cancel all downloads
+   * @returns Number of cancelled downloads
+   */
+  cancelAll(): number {
+    let count = 0;
+    for (const [id] of this.downloads.entries()) {
+      if (this.cancelDownload(id)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Export download history
+   * @returns JSON string of download history
+   */
+  exportHistory(): string {
+    const history = this.getDownloadHistory(1000);
+    return JSON.stringify(history, null, 2);
+  }
+
+  /**
+   * Import download history (for recovery)
+   * @param jsonData JSON string of download history
+   */
+  importHistory(jsonData: string): void {
+    try {
+      const items = JSON.parse(jsonData) as DownloadQueueItem[];
+      for (const item of items) {
+        if (!this.downloads.has(item.id)) {
+          this.downloads.set(item.id, item);
+        }
+      }
+      logger.info(`Imported ${items.length} download history items`);
+    } catch (error) {
+      logger.error('Failed to import download history', { error });
+      throw new DownloadError(
+        DownloadErrorType.UNKNOWN,
+        'Failed to import download history',
+        undefined,
+        false
+      );
+    }
   }
 }
 

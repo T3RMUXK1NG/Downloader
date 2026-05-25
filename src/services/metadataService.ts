@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   METADATA SERVICE v3.0.1 ULTIMATE NEXUS                      ║
+ * ║                   METADATA SERVICE v3.2.0 ULTIMATE NEXUS                      ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite metadata extraction and management service                ║
  * ║  Features: Extract, Edit, Embed, Strip, Cache, Batch processing              ║
+ * ║            EXIF, ID3, MKV Tags, XMP Support, Auto-Detection                  ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/metadataService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 

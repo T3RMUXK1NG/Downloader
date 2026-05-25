@@ -4,7 +4,7 @@
 OMNIPOTENT SOVEREIGN NEXUS - Configuration Management Module
 ============================================================
 
-Version: 3.0.1 ULTIMATE NEXUS
+Version: 3.2.0 ULTIMATE NEXUS
 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
 
 This module provides comprehensive configuration management for the Downloader
@@ -1212,6 +1212,635 @@ def get_config_manager() -> ConfigManager:
 
 
 # =============================================================================
+# CONFIGURATION VALIDATION (v3.2.0)
+# =============================================================================
+
+class ConfigValidationError(Exception):
+    """Exception raised when configuration validation fails."""
+    
+    def __init__(self, errors: List[Tuple[str, str]]) -> None:
+        """
+        Initialize validation error.
+        
+        Args:
+            errors: List of (field, error_message) tuples.
+        """
+        self.errors = errors
+        error_messages = [f"{field}: {msg}" for field, msg in errors]
+        super().__init__(f"Configuration validation failed: {'; '.join(error_messages)}")
+
+
+class ConfigValidator:
+    """
+    Comprehensive configuration validator.
+    
+    Provides validation rules and custom validators for configuration
+    values with detailed error reporting.
+    
+    Example:
+        >>> validator = ConfigValidator()
+        >>> errors = validator.validate(config)
+        >>> if errors:
+        ...     print(f"Validation errors: {errors}")
+    """
+    
+    def __init__(self) -> None:
+        """Initialize validator with default rules."""
+        self._validators: Dict[str, List[Callable[[Any], Optional[str]]]] = {}
+        self._register_default_validators()
+    
+    def _register_default_validators(self) -> None:
+        """Register built-in validators."""
+        # Timeout validators
+        self.register_validator("timeout.total", self._validate_timeout_positive)
+        self.register_validator("timeout.connect", self._validate_timeout_positive)
+        self.register_validator("timeout.read", self._validate_timeout_positive)
+        
+        # Retry validators
+        self.register_validator("retry.max_retries", self._validate_max_retries)
+        self.register_validator("retry.backoff_factor", self._validate_backoff_factor)
+        
+        # Pool validators
+        self.register_validator("pool.max_connections", self._validate_max_connections)
+        
+        # Rate limit validators
+        self.register_validator("rate_limit.requests_per_second", self._validate_rps)
+    
+    @staticmethod
+    def _validate_timeout_positive(value: Any) -> Optional[str]:
+        """Validate timeout is positive."""
+        if not isinstance(value, (int, float)):
+            return f"Expected numeric value, got {type(value).__name__}"
+        if value <= 0:
+            return f"Timeout must be positive, got {value}"
+        if value > 3600:  # 1 hour max
+            return f"Timeout exceeds maximum (3600s), got {value}"
+        return None
+    
+    @staticmethod
+    def _validate_max_retries(value: Any) -> Optional[str]:
+        """Validate max retries."""
+        if not isinstance(value, int):
+            return f"Expected integer, got {type(value).__name__}"
+        if value < 0:
+            return f"Max retries must be non-negative, got {value}"
+        if value > 20:
+            return f"Max retries exceeds maximum (20), got {value}"
+        return None
+    
+    @staticmethod
+    def _validate_backoff_factor(value: Any) -> Optional[str]:
+        """Validate backoff factor."""
+        if not isinstance(value, (int, float)):
+            return f"Expected numeric value, got {type(value).__name__}"
+        if value <= 0:
+            return f"Backoff factor must be positive, got {value}"
+        if value > 10:
+            return f"Backoff factor exceeds maximum (10), got {value}"
+        return None
+    
+    @staticmethod
+    def _validate_max_connections(value: Any) -> Optional[str]:
+        """Validate max connections."""
+        if not isinstance(value, int):
+            return f"Expected integer, got {type(value).__name__}"
+        if value <= 0:
+            return f"Max connections must be positive, got {value}"
+        if value > 1000:
+            return f"Max connections exceeds maximum (1000), got {value}"
+        return None
+    
+    @staticmethod
+    def _validate_rps(value: Any) -> Optional[str]:
+        """Validate requests per second."""
+        if not isinstance(value, (int, float)):
+            return f"Expected numeric value, got {type(value).__name__}"
+        if value <= 0:
+            return f"Requests per second must be positive, got {value}"
+        if value > 10000:
+            return f"Requests per second exceeds maximum (10000), got {value}"
+        return None
+    
+    def register_validator(
+        self,
+        field_path: str,
+        validator: Callable[[Any], Optional[str]]
+    ) -> None:
+        """
+        Register a custom validator for a field.
+        
+        Args:
+            field_path: Dot-notation path to field (e.g., "timeout.total").
+            validator: Function that returns None if valid, error message if invalid.
+        """
+        if field_path not in self._validators:
+            self._validators[field_path] = []
+        self._validators[field_path].append(validator)
+    
+    def validate(self, config: Config) -> List[Tuple[str, str]]:
+        """
+        Validate a configuration instance.
+        
+        Args:
+            config: Configuration to validate.
+        
+        Returns:
+            List of (field_path, error_message) tuples for failed validations.
+        """
+        errors: List[Tuple[str, str]] = []
+        
+        # Get flat representation
+        config_dict = config.to_dict(mask_secrets=False)
+        
+        # Run validators
+        for field_path, validators in self._validators.items():
+            value = self._get_nested_value(config_dict, field_path)
+            for validator in validators:
+                error = validator(value)
+                if error:
+                    errors.append((field_path, error))
+        
+        return errors
+    
+    def validate_and_raise(self, config: Config) -> None:
+        """
+        Validate configuration and raise if invalid.
+        
+        Args:
+            config: Configuration to validate.
+        
+        Raises:
+            ConfigValidationError: If validation fails.
+        """
+        errors = self.validate(config)
+        if errors:
+            raise ConfigValidationError(errors)
+    
+    @staticmethod
+    def _get_nested_value(data: Dict[str, Any], path: str) -> Any:
+        """Get nested dictionary value by dot-notation path."""
+        keys = path.split(".")
+        value = data
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+            else:
+                return None
+        return value
+
+
+# =============================================================================
+# CONFIGURATION MIGRATION (v3.2.0)
+# =============================================================================
+
+class ConfigMigration:
+    """
+    Configuration migration handler for version upgrades.
+    
+    Provides automatic migration of configuration files between
+    different versions with backward compatibility.
+    
+    Example:
+        >>> migration = ConfigMigration()
+        >>> migrated_data = migration.migrate(old_data, from_version="2.0", to_version="3.2")
+    """
+    
+    # Migration registry: {(from_version, to_version): migration_function}
+    _migrations: ClassVar[Dict[Tuple[str, str], Callable[[Dict[str, Any]], Dict[str, Any]]]] = {}
+    
+    def __init__(self) -> None:
+        """Initialize migration handler with default migrations."""
+        self._register_default_migrations()
+    
+    def _register_default_migrations(self) -> None:
+        """Register built-in migrations."""
+        self.register_migration("2.0", "3.0", self._migrate_2_to_3)
+        self.register_migration("3.0", "3.1", self._migrate_3_to_31)
+        self.register_migration("3.1", "3.2", self._migrate_31_to_32)
+    
+    @staticmethod
+    def _migrate_2_to_3(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate from version 2.0 to 3.0."""
+        # Rename old fields
+        if "request_timeout" in data:
+            data["timeout"] = {"total": data.pop("request_timeout")}
+        if "max_concurrent" in data:
+            data["pool"] = {"max_connections": data.pop("max_concurrent")}
+        if "proxy_url" in data:
+            data["proxy"] = {"all": data.pop("proxy_url")}
+        
+        # Add new required fields
+        if "retry" not in data:
+            data["retry"] = {}
+        if "ssl" not in data:
+            data["ssl"] = {}
+        if "rate_limit" not in data:
+            data["rate_limit"] = {}
+        
+        return data
+    
+    @staticmethod
+    def _migrate_3_to_31(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate from version 3.0 to 3.1."""
+        # Add new fields for 3.1
+        if "user_agent" not in data:
+            data["user_agent"] = {}
+        if "dns_cache_ttl" not in data:
+            data["dns_cache_ttl"] = 300
+        
+        return data
+    
+    @staticmethod
+    def _migrate_31_to_32(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate from version 3.1 to 3.2."""
+        # Add new fields for 3.2
+        if "pool" in data and "keepalive_timeout" not in data["pool"]:
+            data["pool"]["keepalive_timeout"] = 30.0
+        if "retry" in data and "jitter" not in data["retry"]:
+            data["retry"]["jitter"] = True
+        
+        return data
+    
+    @classmethod
+    def register_migration(
+        cls,
+        from_version: str,
+        to_version: str,
+        migration_func: Callable[[Dict[str, Any]], Dict[str, Any]]
+    ) -> None:
+        """
+        Register a migration function.
+        
+        Args:
+            from_version: Source version.
+            to_version: Target version.
+            migration_func: Function to transform config data.
+        """
+        cls._migrations[(from_version, to_version)] = migration_func
+    
+    def migrate(
+        self,
+        data: Dict[str, Any],
+        from_version: str,
+        to_version: str = "3.2"
+    ) -> Dict[str, Any]:
+        """
+        Migrate configuration data between versions.
+        
+        Args:
+            data: Configuration dictionary to migrate.
+            from_version: Source version.
+            to_version: Target version.
+        
+        Returns:
+            Dict[str, Any]: Migrated configuration data.
+        """
+        current_version = from_version
+        current_data = deepcopy(data)
+        
+        # Find migration path
+        while current_version != to_version:
+            migration_key = None
+            for (f, t) in self._migrations.keys():
+                if f == current_version:
+                    migration_key = (f, t)
+                    break
+            
+            if migration_key is None:
+                warnings.warn(
+                    f"No migration path found from {current_version} to {to_version}",
+                    UserWarning
+                )
+                break
+            
+            migration_func = self._migrations[migration_key]
+            current_data = migration_func(current_data)
+            current_version = migration_key[1]
+        
+        # Mark with migrated version
+        current_data["_version"] = to_version
+        current_data["_migrated_from"] = from_version
+        
+        return current_data
+    
+    def needs_migration(self, data: Dict[str, Any], target_version: str = "3.2") -> bool:
+        """
+        Check if configuration needs migration.
+        
+        Args:
+            data: Configuration dictionary.
+            target_version: Target version to check against.
+        
+        Returns:
+            bool: True if migration is needed.
+        """
+        current_version = data.get("_version", "2.0")
+        return current_version != target_version
+
+
+# =============================================================================
+# CONFIGURATION PROFILES (v3.2.0 Enhanced)
+# =============================================================================
+
+@dataclass(frozen=True)
+class ProfileDefinition:
+    """
+    Immutable profile definition with complete configuration.
+    
+    Attributes:
+        name: Profile name.
+        description: Profile description.
+        config: Configuration dictionary.
+        tags: Profile tags for categorization.
+        priority: Profile priority (higher = more important).
+    """
+    name: str
+    description: str
+    config: Dict[str, Any]
+    tags: Tuple[str, ...] = field(default_factory=tuple)
+    priority: int = 0
+
+
+class ProfileManager:
+    """
+    Advanced profile management with inheritance and overrides.
+    
+    Provides profile registration, inheritance, and dynamic
+    profile creation capabilities.
+    
+    Example:
+        >>> manager = ProfileManager()
+        >>> manager.register_profile("custom", config_dict)
+        >>> config = manager.get_profile("custom")
+    """
+    
+    def __init__(self) -> None:
+        """Initialize profile manager with default profiles."""
+        self._profiles: Dict[str, ProfileDefinition] = {}
+        self._profile_inheritance: Dict[str, str] = {}  # child -> parent
+        self._lock = threading.RLock()
+        self._register_default_profiles()
+    
+    def _register_default_profiles(self) -> None:
+        """Register built-in profiles."""
+        # Development profile
+        self.register_profile_definition(ProfileDefinition(
+            name="development",
+            description="Development environment with verbose logging",
+            config={
+                "profile": "development",
+                "log_level": "DEBUG",
+                "debug": True,
+                "retry": {"max_retries": 3, "retry_delay": 1.0},
+                "ssl": {"verify": False},
+                "pool": {"max_connections": 50},
+                "rate_limit": {"requests_per_second": 5.0},
+            },
+            tags=("dev", "local", "testing"),
+            priority=1,
+        ))
+        
+        # Staging profile
+        self.register_profile_definition(ProfileDefinition(
+            name="staging",
+            description="Staging environment for pre-production testing",
+            config={
+                "profile": "staging",
+                "log_level": "INFO",
+                "debug": False,
+                "retry": {"max_retries": 5, "retry_delay": 2.0},
+                "pool": {"max_connections": 100},
+                "rate_limit": {"requests_per_second": 10.0},
+            },
+            tags=("staging", "pre-prod", "testing"),
+            priority=2,
+        ))
+        
+        # Production profile
+        self.register_profile_definition(ProfileDefinition(
+            name="production",
+            description="Production environment with optimized settings",
+            config={
+                "profile": "production",
+                "log_level": "WARNING",
+                "debug": False,
+                "retry": {"max_retries": 5, "retry_delay": 2.0, "max_delay": 120.0},
+                "rate_limit": {"requests_per_second": 20.0, "burst_size": 50},
+                "pool": {"max_connections": 200, "max_connections_per_host": 20},
+            },
+            tags=("prod", "live", "production"),
+            priority=10,
+        ))
+        
+        # Testing profile
+        self.register_profile_definition(ProfileDefinition(
+            name="testing",
+            description="Testing environment with fast timeouts",
+            config={
+                "profile": "testing",
+                "log_level": "DEBUG",
+                "debug": True,
+                "retry": {"max_retries": 1, "retry_delay": 0.1},
+                "timeout": {"total": 5.0, "connect": 2.0},
+            },
+            tags=("test", "ci", "automated"),
+            priority=0,
+        ))
+        
+        # High-performance profile (NEW in v3.2.0)
+        self.register_profile_definition(ProfileDefinition(
+            name="high_performance",
+            description="High-performance profile for maximum throughput",
+            config={
+                "profile": "development",
+                "log_level": "ERROR",
+                "debug": False,
+                "retry": {"max_retries": 2, "retry_delay": 0.5, "strategy": "linear"},
+                "rate_limit": {"requests_per_second": 100.0, "burst_size": 200},
+                "pool": {"max_connections": 500, "max_connections_per_host": 50},
+                "timeout": {"total": 15.0, "connect": 5.0},
+            },
+            tags=("perf", "high-throughput", "optimized"),
+            priority=8,
+        ))
+        
+        # Low-bandwidth profile (NEW in v3.2.0)
+        self.register_profile_definition(ProfileDefinition(
+            name="low_bandwidth",
+            description="Low-bandwidth profile for constrained networks",
+            config={
+                "profile": "development",
+                "log_level": "INFO",
+                "debug": False,
+                "retry": {"max_retries": 10, "retry_delay": 5.0, "max_delay": 300.0},
+                "rate_limit": {"requests_per_second": 1.0, "burst_size": 2},
+                "pool": {"max_connections": 10, "max_connections_per_host": 2},
+                "timeout": {"total": 120.0, "connect": 30.0},
+                "chunk_size": 4096,
+            },
+            tags=("slow", "constrained", "mobile"),
+            priority=3,
+        ))
+    
+    def register_profile_definition(self, profile: ProfileDefinition) -> None:
+        """
+        Register a profile definition.
+        
+        Args:
+            profile: Profile definition to register.
+        """
+        with self._lock:
+            self._profiles[profile.name] = profile
+    
+    def register_profile(
+        self,
+        name: str,
+        config: Dict[str, Any],
+        description: str = "",
+        tags: Optional[List[str]] = None,
+        inherits: Optional[str] = None
+    ) -> None:
+        """
+        Register a custom profile.
+        
+        Args:
+            name: Profile name.
+            config: Configuration dictionary.
+            description: Profile description.
+            tags: Profile tags.
+            inherits: Parent profile to inherit from.
+        """
+        # Handle inheritance
+        final_config: Dict[str, Any] = {}
+        if inherits and inherits in self._profiles:
+            parent = self._profiles[inherits]
+            final_config = deepcopy(parent.config)
+            self._profile_inheritance[name] = inherits
+        
+        # Merge with provided config
+        final_config.update(config)
+        
+        profile = ProfileDefinition(
+            name=name,
+            description=description,
+            config=final_config,
+            tags=tuple(tags or []),
+        )
+        self.register_profile_definition(profile)
+    
+    def get_profile(self, name: str) -> Config:
+        """
+        Get configuration for a profile.
+        
+        Args:
+            name: Profile name.
+        
+        Returns:
+            Config: Configuration instance.
+        
+        Raises:
+            KeyError: If profile doesn't exist.
+        """
+        if name not in self._profiles:
+            raise KeyError(f"Profile '{name}' not found")
+        
+        profile = self._profiles[name]
+        return Config.from_dict(profile.config)
+    
+    def list_profiles(self) -> List[str]:
+        """
+        List all available profiles.
+        
+        Returns:
+            List[str]: List of profile names.
+        """
+        return list(self._profiles.keys())
+    
+    def get_profile_info(self, name: str) -> Dict[str, Any]:
+        """
+        Get detailed profile information.
+        
+        Args:
+            name: Profile name.
+        
+        Returns:
+            Dict[str, Any]: Profile information.
+        """
+        if name not in self._profiles:
+            raise KeyError(f"Profile '{name}' not found")
+        
+        profile = self._profiles[name]
+        return {
+            "name": profile.name,
+            "description": profile.description,
+            "tags": list(profile.tags),
+            "priority": profile.priority,
+            "config_keys": list(profile.config.keys()),
+            "inherits": self._profile_inheritance.get(name),
+        }
+    
+    def find_profiles_by_tag(self, tag: str) -> List[str]:
+        """
+        Find profiles by tag.
+        
+        Args:
+            tag: Tag to search for.
+        
+        Returns:
+            List[str]: List of matching profile names.
+        """
+        return [
+            name for name, profile in self._profiles.items()
+            if tag in profile.tags
+        ]
+
+
+# Global instances
+_config_validator: Optional[ConfigValidator] = None
+_config_migration: Optional[ConfigMigration] = None
+_profile_manager: Optional[ProfileManager] = None
+
+
+def get_config_validator() -> ConfigValidator:
+    """
+    Get the global configuration validator.
+    
+    Returns:
+        ConfigValidator: The validator instance.
+    """
+    global _config_validator
+    if _config_validator is None:
+        _config_validator = ConfigValidator()
+    return _config_validator
+
+
+def get_config_migration() -> ConfigMigration:
+    """
+    Get the global configuration migration handler.
+    
+    Returns:
+        ConfigMigration: The migration handler instance.
+    """
+    global _config_migration
+    if _config_migration is None:
+        _config_migration = ConfigMigration()
+    return _config_migration
+
+
+def get_profile_manager() -> ProfileManager:
+    """
+    Get the global profile manager.
+    
+    Returns:
+        ProfileManager: The profile manager instance.
+    """
+    global _profile_manager
+    if _profile_manager is None:
+        _profile_manager = ProfileManager()
+    return _profile_manager
+
+
+# =============================================================================
 # MODULE EXPORTS
 # =============================================================================
 
@@ -1231,8 +1860,19 @@ __all__ = [
     "ConnectionPoolConfig",
     "RateLimitConfig",
     "UserAgentConfig",
+    # Validation (NEW v3.2.0)
+    "ConfigValidator",
+    "ConfigValidationError",
+    # Migration (NEW v3.2.0)
+    "ConfigMigration",
+    # Profiles (NEW v3.2.0)
+    "ProfileDefinition",
+    "ProfileManager",
     # Utility functions
     "get_config_manager",
+    "get_config_validator",
+    "get_config_migration",
+    "get_profile_manager",
     "mask_sensitive",
     "validate_url",
     "validate_proxy_url",

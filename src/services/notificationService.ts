@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   NOTIFICATION SERVICE v3.0.1 ULTIMATE NEXUS                  ║
+ * ║                   NOTIFICATION SERVICE v3.2.0 ULTIMATE NEXUS                  ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite notification management service                          ║
  * ║  Features: Multi-channel, Templates, Scheduling, Priority, History           ║
+ * ║            Digest Mode, Rate Limiting, Webhook Support, Rich Notifications   ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/notificationService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 

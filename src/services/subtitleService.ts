@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   SUBTITLE SERVICE v3.0.1 ULTIMATE NEXUS                      ║
+ * ║                   SUBTITLE SERVICE v3.2.0 ULTIMATE NEXUS                      ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite subtitle operations service                              ║
  * ║  Features: Download, Convert, Generate, Translate, Sync, Cache               ║
+ * ║            AI Enhancement, Format Detection, Batch Processing                ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/subtitleService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 

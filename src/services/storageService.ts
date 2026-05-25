@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   STORAGE SERVICE v3.0.1 ULTIMATE NEXUS                       ║
+ * ║                   STORAGE SERVICE v3.2.0 ULTIMATE NEXUS                       ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite local storage management service                         ║
  * ║  Features: File management, Cleanup, Quota, Cache, Compression              ║
+ * ║            Encryption, Deduplication, Smart Organization                     ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/storageService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 

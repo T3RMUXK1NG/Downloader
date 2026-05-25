@@ -4,7 +4,7 @@
 OMNIPOTENT SOVEREIGN NEXUS - Downloader Base Module
 ====================================================
 
-Version: 3.0.1 ULTIMATE NEXUS
+Version: 3.2.0 ULTIMATE NEXUS
 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
 
 This module provides the base downloader class with comprehensive
@@ -1502,6 +1502,646 @@ class Downloader(DownloaderBase):
 
 
 # =============================================================================
+# CHUNK MANAGER (NEW v3.2.0)
+# =============================================================================
+
+@dataclass
+class ChunkInfo:
+    """
+    Information about a download chunk.
+    
+    Attributes:
+        index: Chunk index (0-based).
+        start_byte: Starting byte position.
+        end_byte: Ending byte position.
+        size: Chunk size in bytes.
+        downloaded: Bytes downloaded.
+        status: Chunk status.
+        temp_file: Temporary file path.
+        checksum: Chunk checksum (if computed).
+    """
+    index: int
+    start_byte: int
+    end_byte: int
+    size: int
+    downloaded: int = 0
+    status: str = "pending"  # pending, downloading, completed, failed
+    temp_file: Optional[str] = None
+    checksum: Optional[str] = None
+    
+    @property
+    def progress(self) -> float:
+        """Get chunk progress percentage."""
+        if self.size == 0:
+            return 0.0
+        return (self.downloaded / self.size) * 100
+    
+    @property
+    def is_complete(self) -> bool:
+        """Check if chunk is complete."""
+        return self.status == "completed" or self.downloaded >= self.size
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "index": self.index,
+            "start_byte": self.start_byte,
+            "end_byte": self.end_byte,
+            "size": self.size,
+            "downloaded": self.downloaded,
+            "progress": round(self.progress, 2),
+            "status": self.status,
+        }
+
+
+class ChunkManager:
+    """
+    Advanced chunk management for multi-part downloads.
+    
+    Provides intelligent chunk splitting, progress tracking,
+    and automatic chunk merging for large file downloads.
+    
+    Example:
+        >>> manager = ChunkManager(total_size=10000000, chunk_size=1000000)
+        >>> chunks = manager.create_chunks()
+        >>> for chunk in chunks:
+        ...     print(f"Chunk {chunk.index}: {chunk.start_byte}-{chunk.end_byte}")
+    """
+    
+    def __init__(
+        self,
+        total_size: int,
+        chunk_size: int = DEFAULT_CHUNK_SIZE * 128,  # 1MB default
+        min_chunk_size: int = DEFAULT_MIN_CHUNK_SIZE,
+        max_chunks: int = 64
+    ) -> None:
+        """
+        Initialize chunk manager.
+        
+        Args:
+            total_size: Total file size in bytes.
+            chunk_size: Desired chunk size in bytes.
+            min_chunk_size: Minimum chunk size.
+            max_chunks: Maximum number of chunks.
+        """
+        self.total_size = total_size
+        self.chunk_size = chunk_size
+        self.min_chunk_size = min_chunk_size
+        self.max_chunks = max_chunks
+        
+        self._chunks: List[ChunkInfo] = []
+        self._lock = threading.Lock()
+        
+        if total_size > 0:
+            self._create_chunks()
+    
+    def _create_chunks(self) -> None:
+        """Create chunk divisions."""
+        # Calculate optimal chunk count
+        chunk_count = max(1, min(
+            self.max_chunks,
+            self.total_size // self.min_chunk_size
+        ))
+        
+        # Adjust chunk size based on count
+        actual_chunk_size = max(
+            self.min_chunk_size,
+            self.total_size // chunk_count
+        )
+        
+        # Create chunks
+        start = 0
+        index = 0
+        
+        while start < self.total_size:
+            end = min(start + actual_chunk_size, self.total_size - 1)
+            
+            self._chunks.append(ChunkInfo(
+                index=index,
+                start_byte=start,
+                end_byte=end,
+                size=end - start + 1,
+            ))
+            
+            start = end + 1
+            index += 1
+    
+    @property
+    def chunk_count(self) -> int:
+        """Get number of chunks."""
+        return len(self._chunks)
+    
+    @property
+    def completed_count(self) -> int:
+        """Get number of completed chunks."""
+        return sum(1 for c in self._chunks if c.is_complete)
+    
+    @property
+    def total_downloaded(self) -> int:
+        """Get total bytes downloaded."""
+        return sum(c.downloaded for c in self._chunks)
+    
+    @property
+    def overall_progress(self) -> float:
+        """Get overall progress percentage."""
+        if self.total_size == 0:
+            return 0.0
+        return (self.total_downloaded / self.total_size) * 100
+    
+    def get_chunk(self, index: int) -> Optional[ChunkInfo]:
+        """
+        Get chunk by index.
+        
+        Args:
+            index: Chunk index.
+        
+        Returns:
+            Optional[ChunkInfo]: Chunk info or None.
+        """
+        if 0 <= index < len(self._chunks):
+            return self._chunks[index]
+        return None
+    
+    def get_pending_chunks(self) -> List[ChunkInfo]:
+        """Get all pending chunks."""
+        return [c for c in self._chunks if not c.is_complete]
+    
+    def update_chunk(
+        self,
+        index: int,
+        downloaded: int,
+        status: Optional[str] = None
+    ) -> None:
+        """
+        Update chunk progress.
+        
+        Args:
+            index: Chunk index.
+            downloaded: Bytes downloaded.
+            status: Optional new status.
+        """
+        with self._lock:
+            if 0 <= index < len(self._chunks):
+                chunk = self._chunks[index]
+                chunk.downloaded = downloaded
+                if status:
+                    chunk.status = status
+                if chunk.downloaded >= chunk.size:
+                    chunk.status = "completed"
+    
+    def mark_chunk_complete(self, index: int, checksum: Optional[str] = None) -> None:
+        """
+        Mark a chunk as complete.
+        
+        Args:
+            index: Chunk index.
+            checksum: Optional chunk checksum.
+        """
+        with self._lock:
+            if 0 <= index < len(self._chunks):
+                chunk = self._chunks[index]
+                chunk.status = "completed"
+                chunk.downloaded = chunk.size
+                if checksum:
+                    chunk.checksum = checksum
+    
+    def mark_chunk_failed(self, index: int) -> None:
+        """
+        Mark a chunk as failed.
+        
+        Args:
+            index: Chunk index.
+        """
+        with self._lock:
+            if 0 <= index < len(self._chunks):
+                self._chunks[index].status = "failed"
+    
+    def get_next_pending_chunk(self) -> Optional[ChunkInfo]:
+        """
+        Get the next pending chunk for download.
+        
+        Returns:
+            Optional[ChunkInfo]: Next pending chunk or None.
+        """
+        with self._lock:
+            for chunk in self._chunks:
+                if chunk.status == "pending":
+                    chunk.status = "downloading"
+                    return chunk
+        return None
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get chunk statistics.
+        
+        Returns:
+            Dict[str, Any]: Statistics dictionary.
+        """
+        with self._lock:
+            return {
+                "total_chunks": len(self._chunks),
+                "completed": sum(1 for c in self._chunks if c.status == "completed"),
+                "downloading": sum(1 for c in self._chunks if c.status == "downloading"),
+                "pending": sum(1 for c in self._chunks if c.status == "pending"),
+                "failed": sum(1 for c in self._chunks if c.status == "failed"),
+                "total_downloaded": self.total_downloaded,
+                "total_size": self.total_size,
+                "progress": round(self.overall_progress, 2),
+            }
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "total_size": self.total_size,
+            "chunk_size": self.chunk_size,
+            "chunks": [c.to_dict() for c in self._chunks],
+            "stats": self.get_stats(),
+        }
+
+
+# =============================================================================
+# CHECKPOINT MANAGER (NEW v3.2.0)
+# =============================================================================
+
+@dataclass
+class CheckpointData:
+    """
+    Checkpoint data for resumable downloads.
+    
+    Attributes:
+        task_id: Download task ID.
+        url: Download URL.
+        output_path: Output file path.
+        total_size: Total file size.
+        downloaded: Bytes already downloaded.
+        chunks: Chunk information.
+        created_at: Checkpoint creation time.
+        updated_at: Last update time.
+        checksum: Partial checksum (if computed).
+        metadata: Additional metadata.
+    """
+    task_id: str
+    url: str
+    output_path: str
+    total_size: int
+    downloaded: int = 0
+    chunks: List[Dict[str, Any]] = field(default_factory=list)
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+    checksum: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "task_id": self.task_id,
+            "url": self.url,
+            "output_path": self.output_path,
+            "total_size": self.total_size,
+            "downloaded": self.downloaded,
+            "chunks": self.chunks,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "checksum": self.checksum,
+            "metadata": self.metadata,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CheckpointData":
+        """Create from dictionary."""
+        return cls(
+            task_id=data["task_id"],
+            url=data["url"],
+            output_path=data["output_path"],
+            total_size=data["total_size"],
+            downloaded=data.get("downloaded", 0),
+            chunks=data.get("chunks", []),
+            created_at=data.get("created_at", time.time()),
+            updated_at=data.get("updated_at", time.time()),
+            checksum=data.get("checksum"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+class CheckpointManager:
+    """
+    Checkpoint manager for resumable downloads.
+    
+    Provides saving and loading of download checkpoints to
+    enable pause/resume functionality across sessions.
+    
+    Example:
+        >>> manager = CheckpointManager(checkpoint_dir="/tmp/checkpoints")
+        >>> manager.save_checkpoint(checkpoint_data)
+        >>> loaded = manager.load_checkpoint(task_id)
+    """
+    
+    def __init__(
+        self,
+        checkpoint_dir: Optional[Union[str, Path]] = None,
+        auto_save_interval: float = 5.0
+    ) -> None:
+        """
+        Initialize checkpoint manager.
+        
+        Args:
+            checkpoint_dir: Directory for storing checkpoints.
+            auto_save_interval: Interval between auto-saves in seconds.
+        """
+        self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else Path(tempfile.gettempdir()) / "download_checkpoints"
+        self.auto_save_interval = auto_save_interval
+        
+        self._checkpoints: Dict[str, CheckpointData] = {}
+        self._lock = threading.Lock()
+        self._last_save: Dict[str, float] = {}
+        
+        # Ensure directory exists
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _get_checkpoint_path(self, task_id: str) -> Path:
+        """Get checkpoint file path."""
+        return self.checkpoint_dir / f"{task_id}.checkpoint"
+    
+    def save_checkpoint(
+        self,
+        data: CheckpointData,
+        force: bool = False
+    ) -> bool:
+        """
+        Save checkpoint to disk.
+        
+        Args:
+            data: Checkpoint data to save.
+            force: Force save regardless of interval.
+        
+        Returns:
+            bool: True if saved successfully.
+        """
+        now = time.time()
+        last_save = self._last_save.get(data.task_id, 0)
+        
+        if not force and (now - last_save) < self.auto_save_interval:
+            return False
+        
+        with self._lock:
+            try:
+                # Update timestamp
+                data.updated_at = now
+                
+                # Save to memory
+                self._checkpoints[data.task_id] = data
+                
+                # Save to disk
+                path = self._get_checkpoint_path(data.task_id)
+                path.write_text(json.dumps(data.to_dict()), encoding="utf-8")
+                
+                self._last_save[data.task_id] = now
+                return True
+                
+            except Exception:
+                return False
+    
+    def load_checkpoint(self, task_id: str) -> Optional[CheckpointData]:
+        """
+        Load checkpoint from disk.
+        
+        Args:
+            task_id: Task ID to load.
+        
+        Returns:
+            Optional[CheckpointData]: Loaded checkpoint or None.
+        """
+        # Try memory first
+        if task_id in self._checkpoints:
+            return self._checkpoints[task_id]
+        
+        # Try disk
+        path = self._get_checkpoint_path(task_id)
+        if not path.exists():
+            return None
+        
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            checkpoint = CheckpointData.from_dict(data)
+            self._checkpoints[task_id] = checkpoint
+            return checkpoint
+            
+        except Exception:
+            return None
+    
+    def delete_checkpoint(self, task_id: str) -> bool:
+        """
+        Delete checkpoint.
+        
+        Args:
+            task_id: Task ID to delete.
+        
+        Returns:
+            bool: True if deleted successfully.
+        """
+        with self._lock:
+            # Remove from memory
+            self._checkpoints.pop(task_id, None)
+            self._last_save.pop(task_id, None)
+            
+            # Remove from disk
+            path = self._get_checkpoint_path(task_id)
+            if path.exists():
+                try:
+                    path.unlink()
+                    return True
+                except Exception:
+                    return False
+            
+            return True
+    
+    def list_checkpoints(self) -> List[str]:
+        """
+        List all available checkpoints.
+        
+        Returns:
+            List[str]: List of task IDs with checkpoints.
+        """
+        checkpoints = set(self._checkpoints.keys())
+        
+        # Also check disk
+        for path in self.checkpoint_dir.glob("*.checkpoint"):
+            task_id = path.stem
+            checkpoints.add(task_id)
+        
+        return list(checkpoints)
+    
+    def cleanup_old_checkpoints(self, max_age_hours: float = 24.0) -> int:
+        """
+        Remove old checkpoints.
+        
+        Args:
+            max_age_hours: Maximum age in hours.
+        
+        Returns:
+            int: Number of checkpoints removed.
+        """
+        removed = 0
+        max_age_seconds = max_age_hours * 3600
+        now = time.time()
+        
+        for task_id in self.list_checkpoints():
+            checkpoint = self.load_checkpoint(task_id)
+            if checkpoint:
+                age = now - checkpoint.updated_at
+                if age > max_age_seconds:
+                    self.delete_checkpoint(task_id)
+                    removed += 1
+        
+        return removed
+
+
+# =============================================================================
+# ENHANCED EVENT CALLBACKS (NEW v3.2.0)
+# =============================================================================
+
+class DownloadEventType(Enum):
+    """Download event types."""
+    STARTED = "started"
+    PROGRESS = "progress"
+    PAUSED = "paused"
+    RESUMED = "resumed"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    RETRY = "retry"
+    CHUNK_STARTED = "chunk_started"
+    CHUNK_COMPLETED = "chunk_completed"
+    SPEED_UPDATE = "speed_update"
+    ETA_UPDATE = "eta_update"
+    CHECKPOINT = "checkpoint"
+
+
+@dataclass
+class DownloadEvent:
+    """
+    Download event data.
+    
+    Attributes:
+        type: Event type.
+        task_id: Task ID.
+        timestamp: Event timestamp.
+        data: Event-specific data.
+    """
+    type: DownloadEventType
+    task_id: str
+    timestamp: float = field(default_factory=time.time)
+    data: Dict[str, Any] = field(default_factory=dict)
+
+
+class EventEmitter:
+    """
+    Event emitter for download events.
+    
+    Provides a pub/sub pattern for download event handling
+    with support for multiple listeners and event filtering.
+    
+    Example:
+        >>> emitter = EventEmitter()
+        >>> emitter.on(DownloadEventType.PROGRESS, my_handler)
+        >>> emitter.emit(DownloadEvent(...))
+    """
+    
+    def __init__(self) -> None:
+        """Initialize event emitter."""
+        self._listeners: Dict[DownloadEventType, List[Callable[[DownloadEvent], None]]] = {}
+        self._lock = threading.Lock()
+    
+    def on(
+        self,
+        event_type: DownloadEventType,
+        callback: Callable[[DownloadEvent], None]
+    ) -> None:
+        """
+        Register event listener.
+        
+        Args:
+            event_type: Event type to listen for.
+            callback: Callback function.
+        """
+        with self._lock:
+            if event_type not in self._listeners:
+                self._listeners[event_type] = []
+            self._listeners[event_type].append(callback)
+    
+    def off(
+        self,
+        event_type: DownloadEventType,
+        callback: Callable[[DownloadEvent], None]
+    ) -> bool:
+        """
+        Remove event listener.
+        
+        Args:
+            event_type: Event type.
+            callback: Callback to remove.
+        
+        Returns:
+            bool: True if removed.
+        """
+        with self._lock:
+            if event_type in self._listeners:
+                try:
+                    self._listeners[event_type].remove(callback)
+                    return True
+                except ValueError:
+                    pass
+            return False
+    
+    def emit(self, event: DownloadEvent) -> None:
+        """
+        Emit an event to all listeners.
+        
+        Args:
+            event: Event to emit.
+        """
+        with self._lock:
+            listeners = self._listeners.get(event.type, []).copy()
+        
+        for callback in listeners:
+            try:
+                callback(event)
+            except Exception:
+                pass  # Don't let one failing callback break others
+    
+    def once(
+        self,
+        event_type: DownloadEventType,
+        callback: Callable[[DownloadEvent], None]
+    ) -> None:
+        """
+        Register one-time event listener.
+        
+        Args:
+            event_type: Event type to listen for.
+            callback: Callback function (will only be called once).
+        """
+        def wrapper(event: DownloadEvent) -> None:
+            self.off(event_type, wrapper)
+            callback(event)
+        
+        self.on(event_type, wrapper)
+    
+    def clear(self, event_type: Optional[DownloadEventType] = None) -> None:
+        """
+        Clear all listeners.
+        
+        Args:
+            event_type: Event type to clear, or None for all.
+        """
+        with self._lock:
+            if event_type:
+                self._listeners.pop(event_type, None)
+            else:
+                self._listeners.clear()
+
+
+# =============================================================================
 # SYNC WRAPPER
 # =============================================================================
 
@@ -1610,6 +2250,7 @@ __all__ = [
     "HashAlgorithm",
     "Priority",
     "ConflictResolution",
+    "DownloadEventType",  # NEW v3.2.0
     # Exceptions
     "DownloadError",
     "ValidationError",
@@ -1621,10 +2262,16 @@ __all__ = [
     "DownloadProgress",
     "DownloadTask",
     "DownloadResult",
+    "ChunkInfo",  # NEW v3.2.0
+    "CheckpointData",  # NEW v3.2.0
+    "DownloadEvent",  # NEW v3.2.0
     # Classes
     "DownloaderBase",
     "Downloader",
     "SyncDownloader",
+    "ChunkManager",  # NEW v3.2.0
+    "CheckpointManager",  # NEW v3.2.0
+    "EventEmitter",  # NEW v3.2.0
     # Protocols
     "ProgressCallback",
     "CompletionCallback",

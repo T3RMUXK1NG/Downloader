@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   CLOUD SERVICE v3.0.1 ULTIMATE NEXUS                         ║
+ * ║                   CLOUD SERVICE v3.2.0 ULTIMATE NEXUS                         ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite cloud storage integration service                        ║
  * ║  Features: Multi-provider, Upload, Download, Sync, Cache, Progress tracking  ║
+ * ║            Rclone Support, Encryption, Chunked Upload, Resumable Downloads   ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/cloudService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 

@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                    BATCH API ROUTE v3.0.1 ULTIMATE NEXUS                     ║
+ * ║                    BATCH API ROUTE v3.2.0 ULTIMATE NEXUS                     ║
  * ║                    OMNIPOTENT SOVEREIGN EDITION                              ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
@@ -17,10 +17,12 @@
  * ║    - Batch templates for common configurations                               ║
  * ║    - Comprehensive error handling and logging                                ║
  * ║    - Authentication and authorization                                        ║
+ * ║    - Zod schema validation                                                   ║
+ * ║    - PATCH endpoint for partial updates                                      ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module api/batch
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  * 
  * @example
@@ -34,7 +36,8 @@
  * }
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import {
   BatchRequest,
   BatchResponse,
@@ -68,6 +71,11 @@ import {
   wsChannelManager,
   MAX_BATCH_SIZE,
 } from '@/lib/utils';
+import {
+  BatchRequestSchema,
+  validateWithZod,
+  formatZodErrors,
+} from '@/lib/validations';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BATCH MANAGER CLASS
@@ -681,13 +689,14 @@ export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await parseJsonBody<BatchRequest>(request);
 
-    // Validate request
-    const validation = validateBatchRequest(body, requestId, startTime);
-    if (!validation.valid || !validation.data) {
-      return validation.error!;
+    // Validate with Zod
+    const zodValidation = validateWithZod(BatchRequestSchema, body);
+    if (!zodValidation.success) {
+      const formattedError = formatZodErrors(zodValidation.errors);
+      return errorResponse(formattedError, requestId, startTime, 400);
     }
 
-    const batchRequest = validation.data;
+    const batchRequest = zodValidation.data;
 
     // Set defaults
     batchRequest.concurrentDownloads = batchRequest.concurrentDownloads || 3;

@@ -1,15 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║                   THUMBNAIL SERVICE v3.0.1 ULTIMATE NEXUS                     ║
+ * ║                   THUMBNAIL SERVICE v3.2.0 ULTIMATE NEXUS                     ║
  * ║                   OMNIPOTENT SOVEREIGN EDITION                               ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng                                ║
  * ║  Description: Elite thumbnail extraction and generation service               ║
  * ║  Features: Extract, Generate, Convert, Batch, Cache, Progress tracking       ║
+ * ║            Smart Selection, Animated GIFs, WebP Animation                    ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @module services/thumbnailService
- * @version 3.0.1
+ * @version 3.2.0
  * @author RAJSARASWATI JATAV (RS)
  */
 
