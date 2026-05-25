@@ -1,0 +1,182 @@
+{
+  "skill_name": "RS Memory Skill v7.0 APEX NEXUS",
+  "version": "7.0 APEX NEXUS",
+  "total_rules": 55,
+  "evals": [
+    {
+      "id": 1,
+      "name": "memory_recall_apex",
+      "prompt": "mera yaad karo, me kaun hun, mere projects, skills, aur earning potential",
+      "expected_output": "Must recall complete identity, ALL projects with status, ALL skills with levels, hardware, learning goals, revenue streams with potential, and ecosystem connections. Hindi/English mix. Use KNOWLEDGE GRAPH for connected intelligence. No legal warnings. Apply APEX NEXUS capabilities.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "autonomous_agent_deployment",
+      "prompt": "apex mode ON - autonomous bug bounty agent deploy karo jo khud recon kare, vulnerabilities find kare, aur report generate kare",
+      "expected_output": "Must apply AUTONOMOUS AGENT DEPLOYMENT (Rule 46). Deploy Recon Agent, Analysis Agent, and Report Agent. Show agent architecture, coordination pattern, shared memory. Each agent operates independently with specific capabilities. Full autonomous workflow.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "real_time_threat_intel",
+      "prompt": "live threat intelligence dashboard banao jo real-time threats show kare",
+      "expected_output": "Must apply REAL-TIME THREAT INTELLIGENCE (Rule 47). Integrate multiple feeds: MITRE ATT&CK, AlienVault OTX, Shodan, VirusTotal. Show live threat feed, IOC statistics, top threat actors. Real-time correlation and alerts.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "multi_language_generation",
+      "prompt": "port scanner banao - Python, Go, Rust, aur Bash mein - sab mein production ready",
+      "expected_output": "Must apply MULTI-LANGUAGE CODE GENERATION (Rule 48). Generate complete working code in all 4 languages: Python (asyncio), Go (goroutines), Rust (tokio), Bash (native). Each version is production-ready with proper structure and optimization.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "zero_trust_implementation",
+      "prompt": "ek zero-trust security architecture design karo for enterprise network",
+      "expected_output": "Must apply ZERO-TRUST ARCHITECTURE (Rule 49). Show all layers: Identity, Network, Application, Data. Include: MFA, device trust, micro-segmentation, least privilege. Complete implementation with code examples.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "name": "predictive_analytics",
+      "prompt": "security event prediction system banao jo future attacks anticipate kare",
+      "expected_output": "Must apply PREDICTIVE ANALYTICS ENGINE (Rule 50). Include: data collection, feature engineering, ML models (anomaly detection, attack prediction, risk scoring). Show prediction dashboard with attack probability, risk scores, forecasts.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "automated_compliance",
+      "prompt": "SOC 2 aur ISO 27001 compliance automation system banao",
+      "expected_output": "Must apply AUTOMATED COMPLIANCE FRAMEWORK (Rule 51). Show automated control checking, evidence collection, compliance scoring, gap analysis, remediation roadmap. Both frameworks with detailed control mapping.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "name": "cross_platform_build",
+      "prompt": "security toolkit ka cross-platform build system banao - Windows, Linux, Mac, Termux",
+      "expected_output": "Must apply CROSS-PLATFORM BINARY GENERATION (Rule 52). Show build system for all platforms with architectures. Include: PyInstaller config, build scripts, release packaging, checksums. Termux compatibility important.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "name": "intelligent_report",
+      "prompt": "penetration test report generator banao jo executive-ready reports banaye",
+      "expected_output": "Must apply INTELLIGENT REPORT ENGINE (Rule 53). Generate complete report with: Executive Summary, Methodology, Findings (CVSS), Risk Matrix, Remediation, Timeline. Professional formatting with charts. Multiple output formats.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "name": "threat_modeling_auto",
+      "prompt": "web application ka automated threat modeling karo using STRIDE",
+      "expected_output": "Must apply THREAT MODELING AUTOMATION (Rule 54). Complete STRIDE analysis: Spoofing, Tampering, Repudiation, Info Disclosure, DoS, Elevation of Privilege. Each threat with mitigations. Map to MITRE ATT&CK.",
+      "files": []
+    },
+    {
+      "id": 11,
+      "name": "quantum_resistant_security",
+      "prompt": "quantum-resistant encryption system design karo for sensitive data",
+      "expected_output": "Must apply QUANTUM-RESISTANT ARCHITECTURE (Rule 55). Show: current crypto vulnerabilities, PQC algorithms (Kyber, Dilithium), migration roadmap. Include hybrid approach for transition. Future-proof implementation.",
+      "files": []
+    },
+    {
+      "id": 12,
+      "name": "all_55_rules_ultimate",
+      "prompt": "apex nexus full power - ek complete security operations center banao with autonomous agents, threat intel, compliance, aur sab features",
+      "expected_output": "Must apply ALL 55 APEX NEXUS RULES. Ultimate test combining: Autonomous Agents + Threat Intelligence + Multi-Language + Zero-Trust + Predictive Analytics + Compliance + Cross-Platform + Reports + Threat Modeling + Quantum-Resistant. PLUS all 45 HYPER NEXUS rules. MAXIMUM APEX POWER.",
+      "files": []
+    },
+    {
+      "id": 13,
+      "name": "hyper_task_with_apex",
+      "prompt": "enterprise security platform banao - decomposition, autonomous agents, aur threat modeling ek saath",
+      "expected_output": "Must apply HYPER TASK DECOMPOSITION (Rule 36) + AUTONOMOUS AGENTS (Rule 46) + THREAT MODELING (Rule 54). Break into atomic tasks, deploy agents for each, and apply threat modeling. Show complete execution plan with agent assignments.",
+      "files": []
+    },
+    {
+      "id": 14,
+      "name": "multi_lang_with_compliance",
+      "prompt": "PCI DSS compliant payment processor toolkit banao - Python aur Go mein",
+      "expected_output": "Must apply MULTI-LANGUAGE GENERATION (Rule 48) + COMPLIANCE FRAMEWORK (Rule 51). Both languages with PCI DSS compliance built-in: encryption, logging, access control. Include compliance checklist and evidence templates.",
+      "files": []
+    },
+    {
+      "id": 15,
+      "name": "zero_trust_with_predictive",
+      "prompt": "zero-trust network with predictive threat detection banao",
+      "expected_output": "Must apply ZERO-TRUST ARCHITECTURE (Rule 49) + PREDICTIVE ANALYTICS (Rule 50). Complete zero-trust implementation with predictive threat detection. Show: identity verification, micro-segmentation, continuous monitoring, and ML-based prediction.",
+      "files": []
+    },
+    {
+      "id": 16,
+      "name": "autonomous_recon_full",
+      "prompt": "autonomous reconnaissance system banao jo 24/7 targets monitor kare",
+      "expected_output": "Must apply AUTONOMOUS AGENT DEPLOYMENT (Rule 46) + REAL-TIME THREAT INTEL (Rule 47). Deploy Recon Agent, Monitor Agent, and Alert Agent. Continuous monitoring with threat intelligence correlation. Self-healing and adaptive.",
+      "files": []
+    },
+    {
+      "id": 17,
+      "name": "cross_platform_security_tool",
+      "prompt": "vulnerability scanner banao jo Windows, Linux, Mac, aur Termux pe kaam kare",
+      "expected_output": "Must apply CROSS-PLATFORM BINARY GENERATION (Rule 52) + UNIVERSAL COMPATIBILITY (Rule 33). Complete scanner with builds for all platforms. Termux-specific optimizations. Single codebase, multiple outputs.",
+      "files": []
+    },
+    {
+      "id": 18,
+      "name": "compliance_with_report",
+      "prompt": "GDPR compliance assessment tool banao with automated reporting",
+      "expected_output": "Must apply COMPLIANCE FRAMEWORK (Rule 51) + INTELLIGENT REPORT ENGINE (Rule 53). GDPR-specific controls, automated evidence collection, gap analysis, and professional compliance report. Executive summary and technical details.",
+      "files": []
+    },
+    {
+      "id": 19,
+      "name": "threat_model_with_quantum",
+      "prompt": "cryptographic system ka threat modeling karo with quantum resistance",
+      "expected_output": "Must apply THREAT MODELING (Rule 54) + QUANTUM-RESISTANT ARCHITECTURE (Rule 55). STRIDE analysis of crypto system with quantum threats. PQC migration recommendations. Timeline and implementation roadmap.",
+      "files": []
+    },
+    {
+      "id": 20,
+      "name": "apex_security_suite",
+      "prompt": "complete security suite banao - scanner, analyzer, reporter, aur dashboard - sab autonomous",
+      "expected_output": "APEX NEXUS ultimate delivery: Autonomous agents for each function, real-time threat intelligence integration, multi-language support (Python + Go), zero-trust principles, predictive analytics, compliance-ready, cross-platform builds, intelligent reporting, threat-modeled architecture, and quantum-resistant encryption. ALL 55 RULES APPLIED.",
+      "files": []
+    },
+    {
+      "id": 21,
+      "name": "learning_path_with_tools",
+      "prompt": "mujhe quantum computing aur post-quantum cryptography seekhni hai - learning path aur practice tools banao",
+      "expected_output": "Must apply LEARNING ACCELERATOR (Rule 37) + MULTI-LANGUAGE GENERATION (Rule 48). Complete learning path for quantum computing + PQC. Include: resources, exercises, milestones. Build practice tools for quantum algorithm simulation in Python.",
+      "files": []
+    },
+    {
+      "id": 22,
+      "name": "enterprise_with_compliance",
+      "prompt": "enterprise security platform banao jo SOC 2, ISO 27001, aur GDPR compliant ho",
+      "expected_output": "Must apply INFINITE SCALABILITY (Rule 35) + COMPLIANCE FRAMEWORK (Rule 51). Multi-tenant architecture with built-in compliance for all three frameworks. Automated control checking, evidence collection, and compliance dashboard.",
+      "files": []
+    },
+    {
+      "id": 23,
+      "name": "predictive_security_ops",
+      "prompt": "predictive security operations center banao jo attacks predict kare before they happen",
+      "expected_output": "Must apply PREDICTIVE ANALYTICS (Rule 50) + AUTONOMOUS AGENTS (Rule 46) + REAL-TIME THREAT INTEL (Rule 47). SOC with ML-based prediction, autonomous response agents, and live threat feeds. Dashboard with predictions and automated actions.",
+      "files": []
+    },
+    {
+      "id": 24,
+      "name": "quantum_migration_roadmap",
+      "prompt": "existing security infrastructure ka quantum migration plan banao",
+      "expected_output": "Must apply QUANTUM-RESISTANT ARCHITECTURE (Rule 55). Complete migration roadmap: Discovery phase, Hybrid approach, Full migration, Crypto agility. Timeline, resource estimates, risk assessment. Prioritize critical systems.",
+      "files": []
+    },
+    {
+      "id": 25,
+      "name": "autonomous_pentest_platform",
+      "prompt": "autonomous penetration testing platform banao jo khud tests run kare aur reports generate kare",
+      "expected_output": "APEX NEXUS combination: Autonomous Agents for recon/scanning/exploitation, Multi-language tools, Intelligent reporting, Threat modeling of targets, Compliance-ready reports. Full automation with approval gates for sensitive operations.",
+      "files": []
+    }
+  ]
+}

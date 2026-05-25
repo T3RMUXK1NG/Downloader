@@ -1,0 +1,442 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# RS TOOLKIT v3.0.1 ULTIMATE NEXUS - Release Workflow
+# ═══════════════════════════════════════════════════════════════════════════════
+# Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
+# License: OMNIPOTENT SOVEREIGN NEXUS
+#
+# Automated release workflow that handles:
+#   - Version bumping
+#   - Changelog generation
+#   - GitHub release creation
+#   - Multi-platform artifact building
+#   - NPM/Docker registry publishing
+#   - Notifications
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: 🚀 Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 3.0.1)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Pre-release'
+        required: true
+        default: false
+        type: boolean
+      draft:
+        description: 'Draft release'
+        required: true
+        default: false
+        type: boolean
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENVIRONMENT VARIABLES
+# ─────────────────────────────────────────────────────────────────────────────
+
+env:
+  NODE_VERSION: '20.x'
+  PYTHON_VERSION: '3.12'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PERMISSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOBS
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PREPARE: Extract version and prepare release
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  prepare:
+    name: 📋 Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📝 Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+
+          TAG="v${VERSION}"
+
+          # Check if prerelease
+          if [[ "$VERSION" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="${{ github.event.inputs.prerelease || 'false' }}"
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+
+          echo "📦 Version: ${VERSION}"
+          echo "🏷️ Tag: ${TAG}"
+          echo "🔄 Pre-release: ${IS_PRERELEASE}"
+
+      - name: 🔍 Validate version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            exit 1
+          fi
+          echo "✅ Valid version: $VERSION"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CHANGELOG: Generate changelog
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  changelog:
+    name: 📝 Generate Changelog
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📝 Generate changelog
+        id: changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag ${{ needs.prepare.outputs.tag }} --strip all
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: 📤 Upload changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGELOG.md
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BUILD-NPM: Build and publish NPM package
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  build-npm:
+    name: 📦 Build NPM Package
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🔨 Build package
+        run: npm run build
+
+      - name: 🧪 Run tests
+        run: npm test || true
+        continue-on-error: true
+
+      - name: 📦 Create NPM package
+        run: npm pack
+
+      - name: 📤 Upload NPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: '*.tgz'
+          retention-days: 30
+
+      - name: 🚀 Publish to NPM
+        if: needs.prepare.outputs.is_prerelease != 'true'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BUILD-DOCKER: Build Docker image
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  build-docker:
+    name: 🐳 Build Docker Image
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: 🔧 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 🔐 Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Generate tags
+        id: tags
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          echo "tags=docker.io/${{ github.repository }}:latest,docker.io/${{ github.repository }}:v${VERSION},docker.io/${{ github.repository }}:${VERSION},ghcr.io/${{ github.repository }}:latest,ghcr.io/${{ github.repository }}:v${VERSION},ghcr.io/${{ github.repository }}:${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: 🔨 Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: true
+          sbom: true
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BUILD-PYTHON: Build Python package
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  build-python:
+    name: 🐍 Build Python Package
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 📦 Install build tools
+        run: |
+          pip install --upgrade pip setuptools wheel build twine
+
+      - name: 🔨 Build Python package
+        run: python -m build
+
+      - name: 📤 Upload Python package
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+          retention-days: 30
+
+      - name: 🚀 Publish to PyPI
+        if: needs.prepare.outputs.is_prerelease != 'true'
+        run: |
+          twine upload dist/* --skip-existing
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        continue-on-error: true
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CREATE-RELEASE: Create GitHub release
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  create-release:
+    name: 🚀 Create GitHub Release
+    needs: [prepare, changelog, build-npm, build-python]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📥 Download changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+
+      - name: 📥 Download NPM package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: artifacts/npm
+
+      - name: 📥 Download Python package
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: artifacts/python
+
+      - name: 📋 Prepare release notes
+        id: notes
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          cat > release-notes.md << EOF
+          # 🚀 RS Toolkit v${VERSION} - ULTIMATE NEXUS
+
+          ## ✨ Highlights
+
+          - **Elite Security Toolkit** - Comprehensive tools for security professionals
+          - **Media Downloader** - Download videos, audio, and playlists
+          - **Multi-platform Support** - Windows, Linux, macOS, Android, iOS
+
+          ## 📦 Downloads
+
+          | Platform | Download |
+          |----------|----------|
+          | NPM Package | \`.tgz\` file below |
+          | Python Package | \`.whl\` / \`.tar.gz\` below |
+          | Docker Image | \`docker pull t3rmuxk1ng/rs-toolkit:v${VERSION}\` |
+
+          ## 🐳 Docker
+
+          \`\`\`bash
+          docker pull docker.io/t3rmuxk1ng/rs-toolkit:v${VERSION}
+          docker pull ghcr.io/t3rmuxk1ng/rs-toolkit:v${VERSION}
+          \`\`\`
+
+          ## 📦 NPM
+
+          \`\`\`bash
+          npm install rs-toolkit-ultimate-nexus@${VERSION}
+          \`\`\`
+
+          ## 🐍 Python (PyPI)
+
+          \`\`\`bash
+          pip install rs-toolkit==${VERSION}
+          \`\`\`
+
+          ---
+
+          EOF
+
+          # Append changelog
+          cat CHANGELOG.md >> release-notes.md || true
+
+      - name: 🚀 Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: RS Toolkit ${{ needs.prepare.outputs.tag }} - ULTIMATE NEXUS
+          body_path: release-notes.md
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
+          files: |
+            artifacts/npm/*.tgz
+            artifacts/python/*.whl
+            artifacts/python/*.tar.gz
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # NOTIFY: Send release notifications
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  notify:
+    name: 📢 Notify
+    needs: [prepare, create-release]
+    if: success()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📧 Discord Notification
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "🚀 RS Toolkit ${{ needs.prepare.outputs.tag }} Released!"
+          description: |
+            **Version:** ${{ needs.prepare.outputs.version }}
+            **Status:** Released ✅
+
+            📦 [Download](https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }})
+          color: 0x00ff00
+
+      - name: 📧 Telegram Notification
+        uses: appleboy/telegram-action@v1.0.0
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🚀 RS Toolkit v${{ needs.prepare.outputs.version }} Released!
+
+            ✨ Ultimate Nexus Edition
+            📦 Download: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }}
+
+            👤 Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
+
+      - name: 📧 Slack Notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: |
+            🚀 New Release: RS Toolkit ${{ needs.prepare.outputs.tag }}
+            📦 Version: ${{ needs.prepare.outputs.version }}
+            🔗 Link: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }}
+          fields: repo,commit,author
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: 🐦 Twitter Notification
+        uses: ethomson/send-tweet-action@v1
+        with:
+          status: |
+            🚀 RS Toolkit v${{ needs.prepare.outputs.version }} - ULTIMATE NEXUS released!
+
+            ✨ Elite Security Toolkit
+            📥 Download: https://github.com/${{ github.repository }}/releases
+
+            #SecurityTools #Downloader #OpenSource
+          consumer-key: ${{ secrets.TWITTER_CONSUMER_KEY }}
+          consumer-secret: ${{ secrets.TWITTER_CONSUMER_SECRET }}
+          access-token: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          access-token-secret: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        continue-on-error: true
