@@ -1,9 +1,11 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * RS TOOLKIT v3.1.0 ULTIMATE NEXUS - Next.js Configuration
+ * RS TOOLKIT v3.1.1 ULTIMATE NEXUS - Next.js Configuration
  * ═══════════════════════════════════════════════════════════════════════════════
  * Author: RAJSARASWATI JATAV (RS) - T3rmuxk1ng
  * License: OMNIPOTENT SOVEREIGN NEXUS
+ * 
+ * Hybrid Mode: Next.js Frontend + Python Backend + APK Support
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -13,28 +15,37 @@ const isDev = process.env.NODE_ENV === 'development';
 const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig: NextConfig = {
-  // CRITICAL: Static export for APK/PWA
-  output: 'export',
-  trailingSlash: true,
-
+  // Standalone for API routes support
+  output: 'standalone',
+  
   // React settings
   reactStrictMode: true,
 
-  // Disable image optimization for static export
+  // Image optimization
   images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
     unoptimized: true,
   },
 
   // Environment variables
   env: {
     NEXT_PUBLIC_APP_NAME: 'RS Toolkit',
-    NEXT_PUBLIC_APP_VERSION: '3.1.0',
+    NEXT_PUBLIC_APP_VERSION: '3.1.1',
     NEXT_PUBLIC_APP_EDITION: 'ULTIMATE NEXUS',
     NEXT_PUBLIC_APP_AUTHOR: 'RAJSARASWATI JATAV (RS)',
+    NEXT_PUBLIC_PYTHON_BACKEND: 'http://localhost:8000',
   },
 
-  // Disable experimental features that don't work with static export
+  // Experimental features
   experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
     optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
 
@@ -56,6 +67,16 @@ const nextConfig: NextConfig = {
       };
     }
     return config;
+  },
+
+  // API rewrites to Python backend
+  async rewrites() {
+    return [
+      {
+        source: '/api/python/:path*',
+        destination: 'http://localhost:8000/api/:path*',
+      },
+    ];
   },
 
   // Disable powered-by header
